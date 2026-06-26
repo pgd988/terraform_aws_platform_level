@@ -39,6 +39,22 @@ resource "aws_lb" "main" {
   subnets            = local.public_subnets
 }
 
+# Target Group for EKS Default NGINX Sink
+resource "aws_lb_target_group" "default_nginx" {
+  name        = "platform-default-nginx-tg"
+  port        = 80
+  protocol    = "HTTP"
+  vpc_id      = data.aws_ssm_parameter.vpc_id.value
+  target_type = "ip"
+}
+
+# Export Target Group ARN via SSM
+resource "aws_ssm_parameter" "default_tg_arn" {
+  name  = "/platform/alb/default_tg_arn"
+  type  = "String"
+  value = aws_lb_target_group.default_nginx.arn
+}
+
 # HTTPS Listener
 resource "aws_lb_listener" "https" {
   load_balancer_arn = aws_lb.main.arn
@@ -48,12 +64,7 @@ resource "aws_lb_listener" "https" {
   certificate_arn   = aws_acm_certificate.alb_cert.arn
 
   default_action {
-    type = "fixed-response"
-
-    fixed_response {
-      content_type = "text/plain"
-      message_body = "Not Found"
-      status_code  = "404"
-    }
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.default_nginx.arn
   }
 }

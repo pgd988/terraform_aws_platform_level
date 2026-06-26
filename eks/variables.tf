@@ -23,3 +23,9 @@ variable "eks_cluster_name" {
   type    = string
   default = "platform-cluster"
 }
+
+variable "node_instance_types" {
+  description = "List of EC2 instance types for the default EKS managed node group"
+  type        = list(string)
+  default     = ["t3.medium"]
+}

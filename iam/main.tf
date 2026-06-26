@@ -102,3 +102,17 @@ resource "aws_iam_role_policy_attachment" "eks_registry" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
   role       = aws_iam_role.eks_node.name
 }
+
+# AWS Load Balancer Controller Policy
+resource "aws_iam_policy" "lbc" {
+  name        = "AWSLoadBalancerControllerIAMPolicy"
+  path        = "/"
+  description = "AWS Load Balancer Controller IAM Policy"
+  policy      = file("${path.module}/policies/lbc_iam_policy.json")
+}
+
+resource "aws_ssm_parameter" "lbc_policy_arn" {
+  name  = "/platform/iam/policies/lbc_policy_arn"
+  type  = "String"
+  value = aws_iam_policy.lbc.arn
+}

@@ -27,5 +27,18 @@ resource "aws_eks_node_group" "main" {
     min_size     = 1
   }
 
-  instance_types = ["t3.medium"]
+  instance_types = var.node_instance_types
+}
+
+resource "aws_eks_addon" "pod_identity" {
+  count        = var.deploy_eks ? 1 : 0
+  cluster_name = aws_eks_cluster.main[0].name
+  addon_name   = "eks-pod-identity-agent"
+}
+
+# Default Kubernetes Workloads / Apps
+module "apps" {
+  source     = "./apps"
+  count      = var.deploy_eks ? 1 : 0
+  depends_on = [aws_eks_node_group.main]
 }
