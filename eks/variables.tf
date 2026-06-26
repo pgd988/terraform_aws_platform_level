@@ -29,3 +29,20 @@ variable "node_instance_types" {
   type        = list(string)
   default     = ["t3.medium"]
 }
+
+variable "alb_sg_ssm_path" {
+  type    = string
+  default = "/platform/alb/security_group_id"
+}
+
+variable "admin_allowed_cidrs" {
+  description = "IPv4 CIDR blocks allowed to reach EKS API public endpoint (DevOps local PCs / VPN)"
+  type        = list(string)
+  default     = ["0.0.0.0/0"]
+}
+
+variable "eks_admins_ssm_path" {
+  description = "SSM Parameter path for the IAM group ARN of EKS Admins"
+  type        = string
+  default     = "/platform/iam/eks_admins_arn"
+}

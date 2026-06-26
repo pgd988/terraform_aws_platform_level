@@ -19,3 +19,7 @@ data "aws_ami" "amazon_linux" {
     values = ["amzn2-ami-hvm-*-x86_64-gp2"]
   }
 }
+
+data "aws_ssm_parameter" "public_subnets" {
+  name = var.public_subnets_ssm_path
+}

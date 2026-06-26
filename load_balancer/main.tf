@@ -1,5 +1,7 @@
 locals {
-  public_subnets = split(",", data.aws_ssm_parameter.public_subnets.value)
+  public_subnets    = split(",", data.aws_ssm_parameter.public_subnets.value)
+  private_subnets   = split(",", data.aws_ssm_parameter.private_subnets.value)
+  cloudflare_policy = jsondecode(file("${path.module}/policies/cloudflare_nlb_policy.json"))
 }
 
 # Generate a self-signed certificate
@@ -33,14 +35,102 @@ resource "aws_acm_certificate" "alb_cert" {
   certificate_body = tls_self_signed_cert.alb_cert[0].cert_pem
 }
 
-# Application Load Balancer
+# ==============================================================================
+# Security Groups (Zero-Trust Locking Boundaries)
+# ==============================================================================
+
+# 1. NLB Security Group allowing ingress strictly from Cloudflare AS13335
+resource "aws_security_group" "nlb_cloudflare" {
+  count       = var.deploy_alb ? 1 : 0
+  name        = "platform-nlb-cloudflare-sg"
+  description = "Security policy allowing ingress strictly from Cloudflare AS13335 CIDRs"
+  vpc_id      = data.aws_ssm_parameter.vpc_id.value
+
+  ingress {
+    description = "Allow HTTPS (443) from Cloudflare AS"
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = local.cloudflare_policy.AllowedCIDRs
+  }
+
+  ingress {
+    description = "Allow HTTP (80) from Cloudflare AS"
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = local.cloudflare_policy.AllowedCIDRs
+  }
+
+  egress {
+    description = "Allow traffic forward to internal tiers"
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"]
+  }
+
+  lifecycle {
+    prevent_destroy = true
+  }
+}
+
+# 2. ALB Security Group allowing ingress strictly from NLB Security Group
+resource "aws_security_group" "alb_locked" {
+  count       = var.deploy_alb ? 1 : 0
+  name        = "platform-alb-locked-sg"
+  description = "Zero-trust security boundary allowing ingress strictly from NLB"
+  vpc_id      = data.aws_ssm_parameter.vpc_id.value
+
+  ingress {
+    description     = "Allow HTTPS (443) from NLB Security Group"
+    from_port       = 443
+    to_port         = 443
+    protocol        = "tcp"
+    security_groups = [aws_security_group.nlb_cloudflare[0].id]
+  }
+
+  ingress {
+    description     = "Allow HTTP (80) from NLB Security Group"
+    from_port       = 80
+    to_port         = 80
+    protocol        = "tcp"
+    security_groups = [aws_security_group.nlb_cloudflare[0].id]
+  }
+
+  egress {
+    description = "Allow application traffic forward to EKS / private tier"
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"]
+  }
+
+  lifecycle {
+    prevent_destroy = true
+  }
+}
+
+# Export ALB Security Group ID via SSM
+resource "aws_ssm_parameter" "alb_sg_id" {
+  count = var.deploy_alb ? 1 : 0
+  name  = "/platform/alb/security_group_id"
+  type  = "String"
+  value = aws_security_group.alb_locked[0].id
+}
+
+# ==============================================================================
+# Application Load Balancer (Private Tier)
+# ==============================================================================
+
 resource "aws_lb" "main" {
   count                      = var.deploy_alb ? 1 : 0
   name                       = "platform-alb"
-  internal                   = false
+  internal                   = true
   load_balancer_type         = "application"
-  security_groups            = [data.aws_ssm_parameter.alb_sg.value]
-  subnets                    = local.public_subnets
+  security_groups            = [aws_security_group.alb_locked[0].id]
+  subnets                    = local.private_subnets
+  drop_invalid_header_fields = true
   enable_deletion_protection = true
 }
 
@@ -68,7 +158,7 @@ resource "aws_lb_listener" "https" {
   load_balancer_arn = aws_lb.main[0].arn
   port              = "443"
   protocol          = "HTTPS"
-  ssl_policy        = "ELBSecurityPolicy-2016-08"
+  ssl_policy        = "ELBSecurityPolicy-TLS13-1-2-2021-06"
   certificate_arn   = aws_acm_certificate.alb_cert[0].arn
 
   default_action {
@@ -96,7 +186,7 @@ resource "aws_lb_listener" "http" {
 }
 
 # ==============================================================================
-# Static External IP Bridge (NLB Chaining to ALB)
+# Static External IP Bridge (NLB Chaining to ALB - Public Tier)
 # ==============================================================================
 
 # 1. Allocate Static Elastic IPs for NLB (Protected from destroy)
@@ -106,46 +196,6 @@ resource "aws_eip" "nlb" {
 
   tags = {
     Name = "platform-static-entrypoint-ip-${count.index}"
-  }
-
-  lifecycle {
-    prevent_destroy = true
-  }
-}
-
-locals {
-  cloudflare_policy = jsondecode(file("${path.module}/policies/cloudflare_nlb_policy.json"))
-}
-
-# NLB VPC Security Group allowing ingress strictly from Cloudflare AS13335
-resource "aws_security_group" "nlb_cloudflare" {
-  count       = var.deploy_alb ? 1 : 0
-  name        = "platform-nlb-cloudflare-sg"
-  description = "Security policy allowing ingress strictly from Cloudflare AS13335 CIDRs"
-  vpc_id      = data.aws_ssm_parameter.vpc_id.value
-
-  ingress {
-    description = "Allow HTTPS (443) from Cloudflare AS"
-    from_port   = 443
-    to_port     = 443
-    protocol    = "tcp"
-    cidr_blocks = local.cloudflare_policy.AllowedCIDRs
-  }
-
-  ingress {
-    description = "Allow HTTP (80) from Cloudflare AS"
-    from_port   = 80
-    to_port     = 80
-    protocol    = "tcp"
-    cidr_blocks = local.cloudflare_policy.AllowedCIDRs
-  }
-
-  egress {
-    description = "Allow all egress forward to ALB"
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
   }
 
   lifecycle {

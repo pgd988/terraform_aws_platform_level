@@ -14,11 +14,6 @@ variable "public_subnets_ssm_path" {
   default = "/platform/vpc/public_subnets"
 }
 
-variable "alb_sg_ssm_path" {
-  type    = string
-  default = "/platform/vpc/alb_sg"
-}
-
 variable "deploy_alb" {
   description = "Switch to deploy Application Load Balancer and its chained Network Load Balancer entrypoint"
   type        = bool
@@ -29,4 +24,9 @@ variable "public_subnet_count" {
   description = "Number of public subnets to attach NLB EIPs to"
   type        = number
   default     = 2
+}
+
+variable "private_subnets_ssm_path" {
+  type    = string
+  default = "/platform/vpc/private_subnets"
 }

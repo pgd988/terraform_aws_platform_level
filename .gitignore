@@ -38,3 +38,10 @@ terraform.rc
 
 # OS Generated
 .DS_Store
+
+# Aqua Trivy Security Scanner
+.trivy/
+.trivycache/
+.trivyignore
+trivy-results.*
+*.trivy.*

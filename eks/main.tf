@@ -2,13 +2,36 @@ locals {
   private_subnets = split(",", data.aws_ssm_parameter.private_subnets.value)
 }
 
+resource "aws_kms_key" "eks" {
+  count                   = var.deploy_eks ? 1 : 0
+  description             = "EKS Secret Encryption Key"
+  deletion_window_in_days = 7
+  enable_key_rotation     = true
+}
+
 resource "aws_eks_cluster" "main" {
-  count    = var.deploy_eks ? 1 : 0
-  name     = var.eks_cluster_name
-  role_arn = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/eks-cluster-role"
+  count                     = var.deploy_eks ? 1 : 0
+  name                      = var.eks_cluster_name
+  role_arn                  = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/eks-cluster-role"
+  enabled_cluster_log_types = ["api", "audit", "authenticator", "controllerManager", "scheduler"]
+
+  access_config {
+    authentication_mode                         = "API_AND_CONFIG_MAP"
+    bootstrap_cluster_creator_admin_permissions = true
+  }
+
+  encryption_config {
+    resources = ["secrets"]
+    provider {
+      key_arn = aws_kms_key.eks[0].arn
+    }
+  }
 
   vpc_config {
-    subnet_ids = local.private_subnets
+    subnet_ids              = local.private_subnets
+    endpoint_private_access = true
+    endpoint_public_access  = true
+    public_access_cidrs     = var.admin_allowed_cidrs
   }
 
   lifecycle {
@@ -40,6 +63,38 @@ resource "aws_eks_addon" "pod_identity" {
   count        = var.deploy_eks ? 1 : 0
   cluster_name = aws_eks_cluster.main[0].name
   addon_name   = "eks-pod-identity-agent"
+}
+
+# Zero-trust EKS boundary allowing ingress strictly from ALB Security Group
+resource "aws_security_group_rule" "alb_to_eks" {
+  count                    = var.deploy_eks ? 1 : 0
+  type                     = "ingress"
+  from_port                = 80
+  to_port                  = 8080
+  protocol                 = "tcp"
+  source_security_group_id = data.aws_ssm_parameter.alb_sg.value
+  security_group_id        = aws_eks_cluster.main[0].vpc_config[0].cluster_security_group_id
+  description              = "Allow application traffic strictly from ALB Security Group"
+}
+
+# Grant EKS Admins IAM Group ClusterAdmin kubectl permissions
+resource "aws_eks_access_entry" "eks_admins" {
+  count         = var.deploy_eks ? 1 : 0
+  cluster_name  = aws_eks_cluster.main[0].name
+  principal_arn = data.aws_ssm_parameter.eks_admins_arn.value
+  type          = "STANDARD"
+}
+
+resource "aws_eks_access_policy_association" "eks_admins" {
+  count         = var.deploy_eks ? 1 : 0
+  cluster_name  = aws_eks_cluster.main[0].name
+  policy_arn    = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
+  principal_arn = data.aws_ssm_parameter.eks_admins_arn.value
+
+  access_scope {
+    type = "cluster"
+  }
+  depends_on = [aws_eks_access_entry.eks_admins]
 }
 
 # Default Kubernetes Workloads / Apps

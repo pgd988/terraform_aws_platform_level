@@ -38,3 +38,8 @@ variable "deploy_monitoring" {
   type    = bool
   default = true
 }
+
+variable "public_subnets_ssm_path" {
+  type    = string
+  default = "/platform/vpc/public_subnets"
+}

@@ -102,3 +102,15 @@ resource "aws_iam_role_policy_attachment" "eks_registry" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
   role       = aws_iam_role.eks_node.name
 }
+
+# IAM Group for EKS Administrators
+resource "aws_iam_group" "eks_admins" {
+  name = "eks_admins"
+}
+
+# Export IAM Group ARN via SSM
+resource "aws_ssm_parameter" "eks_admins_arn" {
+  name  = "/platform/iam/eks_admins_arn"
+  type  = "String"
+  value = aws_iam_group.eks_admins.arn
+}
