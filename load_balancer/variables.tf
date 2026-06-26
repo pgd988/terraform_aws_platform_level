@@ -18,3 +18,15 @@ variable "alb_sg_ssm_path" {
   type    = string
   default = "/platform/vpc/alb_sg"
 }
+
+variable "deploy_alb" {
+  description = "Switch to deploy Application Load Balancer and its chained Network Load Balancer entrypoint"
+  type        = bool
+  default     = true
+}
+
+variable "public_subnet_count" {
+  description = "Number of public subnets to attach NLB EIPs to"
+  type        = number
+  default     = 2
+}

@@ -11,7 +11,7 @@ This repository contains Terraform configurations for deploying platform-level s
   - `apps/`: Default Kubernetes workloads deployed via Helm (e.g., default NGINX sink returning 403).
   - `policies/`: Self-hosted JSON IAM policies for EKS add-ons.
 - `load_balancer`: Application Load Balancer with self-signed SSL/TLS termination and direct pod IP target group routing.
-- `databases`: ElastiCache for Redis and generic DynamoDB templates.
+- `databases`: ElastiCache for Redis, conditional Amazon RDS PostgreSQL, and generic DynamoDB templates.
 - `monitoring`: CloudWatch dashboards and alarms.
 - `logging`: Centralized logging configurations.
 - `iam`: Identity and Access Management roles and policies.
@@ -25,6 +25,34 @@ Authentication for cluster controllers (such as the AWS Load Balancer Controller
 The Application Load Balancer routes traffic directly to pods' IPs inside the EKS cluster bypassing `NodePort` kube-proxy hops:
 - The `load_balancer` module creates an `aws_lb_target_group` with `target_type = "ip"` and exports its ARN to SSM Parameter Store (`/platform/alb/default_tg_arn`).
 - The `eks/apps` module deploys an NGINX default backend pod and injects an AWS Load Balancer Controller `TargetGroupBinding` Custom Resource directly into the Helm chart's `extraManifests`. This dynamically binds the pod IPs to the ALB Target Group without causing Terraform CRD schema validation errors at plan time.
+
+### 3. Customizable RDS Database Flags
+The `databases` module supports conditional Amazon RDS PostgreSQL deployments (`deploy_rds = true`). Master user credentials are automatically generated and securely stored via AWS Secrets Manager (`manage_master_user_password = true`). 
+
+To pass custom PostgreSQL database flags/parameters without modifying module code, supply a key-value map to the `rds_custom_parameters` variable:
+
+```hcl
+deploy_rds = true
+rds_custom_parameters = {
+  "shared_buffers"  = "256MB"
+  "log_connections" = "1"
+}
+```
+
+### 4. Critical Resource Deletion Safeguards
+All core infrastructure components (Application Load Balancer, EKS Cluster & Node Groups, RDS PostgreSQL, DynamoDB tables, and EC2 VMs) are protected against accidental destruction via native AWS API termination locks or strict Terraform lifecycle guards.
+
+**Rule of Thumb**: Once any critical component has been deployed via variable toggles, setting its deploy flag to `false` will be rejected during `apply`. To intentionally decommission a resource, you must first explicitly remove or disable its delete protection lock before attempting destruction.
+
+### 5. Static External IP Bridge (NLB Chaining to ALB)
+Because AWS Application Load Balancers scale IP addresses dynamically and cannot attach static Elastic IPs directly, the `load_balancer` module implements an HCL **NLB Chaining Bridge** (`deploy_alb = true`).
+
+A public Network Load Balancer (NLB) is provisioned with dedicated Elastic IPs (`aws_eip.nlb`) mapped across public subnets. The NLB uses `target_type = "alb"` target groups to forward TCP ports 80 and 443 directly into the Application Load Balancer. This gives external DNS providers (e.g., Cloudflare) fixed, immutable entrypoint IP addresses while preserving full ALB Layer 7 path routing and SSL termination.
+
+### 6. Cloudflare Reverse Proxy Ingress Hardening
+To prevent unauthorized origin IP scanning and bypass attacks, the public NLB entrypoint is bound to a hardened VPC Security Group (`aws_security_group.nlb_cloudflare`).
+
+The security group decodes `load_balancer/policies/cloudflare_nlb_policy.json` during execution and restricts all inbound TCP traffic (ports 80 and 443) strictly to Cloudflare's published Reverse Proxy IPv4 CIDR ranges (AS13335). This ensures that only traffic originating from Cloudflare edge nodes can reach your load balancing stack.
 
 ## Terraform Backend Setup (S3 & DynamoDB)
 
