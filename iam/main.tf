@@ -114,3 +114,10 @@ resource "aws_ssm_parameter" "eks_admins_arn" {
   type  = "String"
   value = aws_iam_group.eks_admins.arn
 }
+
+# IAM Policy for AWS Load Balancer Controller (IRSA)
+resource "aws_iam_policy" "lbc" {
+  name        = "AWSLoadBalancerControllerIAMPolicy"
+  description = "IAM policy for the AWS Load Balancer Controller running in EKS"
+  policy      = file("${path.module}/policies/lbc_iam_policy.json")
+}

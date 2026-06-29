@@ -30,9 +30,10 @@ variable "node_instance_types" {
   default     = ["t3.micro"]
 }
 
-variable "alb_sg_ssm_path" {
-  type    = string
-  default = "/platform/alb/security_group_id"
+variable "alb_sg_id" {
+  description = "Security Group ID of the ALB (output from load_balancer module). Required when deploy_eks = true."
+  type        = string
+  default     = ""
 }
 
 variable "admin_allowed_cidrs" {
@@ -41,10 +42,10 @@ variable "admin_allowed_cidrs" {
   default     = ["0.0.0.0/0"]
 }
 
-variable "eks_admins_ssm_path" {
-  description = "SSM Parameter path for the IAM group ARN of EKS Admins"
+variable "eks_admins_arn" {
+  description = "ARN of the IAM Group for EKS Administrators (output from iam module). Required when deploy_eks = true."
   type        = string
-  default     = "/platform/iam/eks_admins_arn"
+  default     = ""
 }
 
 variable "deletion_protection" {

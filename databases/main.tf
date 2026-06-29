@@ -1,5 +1,6 @@
 locals {
   private_subnets = split(",", data.aws_ssm_parameter.private_subnets.value)
+  vpc_id          = data.aws_ssm_parameter.vpc_id.value
 }
 
 # DynamoDB Template (Disabled by default)
@@ -20,7 +21,10 @@ resource "aws_dynamodb_table" "main" {
   }
 }
 
+# ==============================================================================
 # ElastiCache Redis
+# ==============================================================================
+
 resource "aws_elasticache_subnet_group" "redis" {
   name       = "platform-redis-subnet-group"
   subnet_ids = local.private_subnets
@@ -35,7 +39,7 @@ resource "aws_elasticache_cluster" "redis" {
   engine_version           = "7.0"
   port                     = 6379
   subnet_group_name        = aws_elasticache_subnet_group.redis.name
-  security_group_ids       = [data.aws_ssm_parameter.redis_sg.value]
+  security_group_ids       = [aws_security_group.redis.id]
   snapshot_retention_limit = 7
 }
 
@@ -74,7 +78,7 @@ resource "aws_db_instance" "main" {
   manage_master_user_password = true
   parameter_group_name        = aws_db_parameter_group.rds[0].name
   db_subnet_group_name        = aws_db_subnet_group.rds[0].name
-  vpc_security_group_ids      = [data.aws_ssm_parameter.rds_sg.value]
+  vpc_security_group_ids      = [aws_security_group.rds[0].id]
   skip_final_snapshot         = false
   deletion_protection         = var.deletion_protection
 }

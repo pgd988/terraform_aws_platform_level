@@ -14,10 +14,6 @@ variable "private_subnets_ssm_path" {
   default = "/infra/networking/private_subnets"
 }
 
-variable "redis_sg_ssm_path" {
-  type    = string
-  default = "/platform/vpc/redis_sg"
-}
 
 variable "deploy_dynamodb" {
   type    = bool
@@ -31,10 +27,6 @@ variable "deploy_rds" {
   default     = false
 }
 
-variable "rds_sg_ssm_path" {
-  type    = string
-  default = "/platform/vpc/rds_sg"
-}
 
 variable "rds_engine" {
   type    = string

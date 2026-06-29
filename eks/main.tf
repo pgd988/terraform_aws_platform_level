@@ -77,7 +77,7 @@ resource "aws_security_group_rule" "alb_to_eks" {
   from_port                = 80
   to_port                  = 8080
   protocol                 = "tcp"
-  source_security_group_id = data.aws_ssm_parameter.alb_sg.value
+  source_security_group_id = var.alb_sg_id
   security_group_id        = aws_eks_cluster.main[0].vpc_config[0].cluster_security_group_id
   description              = "Allow application traffic strictly from ALB Security Group"
 }
@@ -86,7 +86,7 @@ resource "aws_security_group_rule" "alb_to_eks" {
 resource "aws_eks_access_entry" "eks_admins" {
   count         = var.deploy_eks ? 1 : 0
   cluster_name  = aws_eks_cluster.main[0].name
-  principal_arn = data.aws_ssm_parameter.eks_admins_arn.value
+  principal_arn = var.eks_admins_arn
   type          = "STANDARD"
 }
 
@@ -94,7 +94,7 @@ resource "aws_eks_access_policy_association" "eks_admins" {
   count         = var.deploy_eks ? 1 : 0
   cluster_name  = aws_eks_cluster.main[0].name
   policy_arn    = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
-  principal_arn = data.aws_ssm_parameter.eks_admins_arn.value
+  principal_arn = var.eks_admins_arn
 
   access_scope {
     type = "cluster"
