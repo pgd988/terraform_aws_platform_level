@@ -42,6 +42,5 @@ terraform.rc
 # Aqua Trivy Security Scanner
 .trivy/
 .trivycache/
-.trivyignore
 trivy-results.*
 *.trivy.*

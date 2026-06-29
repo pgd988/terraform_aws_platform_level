@@ -1,0 +1,36 @@
+# .trivyignore
+# Deliberate suppressions for findings that are accepted risks in this repository.
+# Each entry must include a justification comment explaining the decision.
+#
+# Format:
+#   AVD-ID [exp:YYYY-MM-DD]
+#   # Justification
+#
+# Docs: https://aquasecurity.github.io/trivy/latest/docs/configuration/filtering/#trivyignore
+
+# AWS-0104 – Security group egress unrestricted to 0.0.0.0/0
+# Resource: aws_vpc_security_group_egress_rule.all_outbound (network/security_groups.tf)
+# Justification: The core-default-sg is a shared baseline SG for internal VPC workloads.
+# Outbound traffic is intentionally unrestricted at the SG level; network-level egress
+# control is enforced via the NACL (network/vpc.tf) which restricts egress to
+# TCP 443, TCP/UDP 53, TCP 80, and ephemeral return ports only.
+AVD-AWS-0104
+
+# AWS-0040 – EKS cluster has public endpoint access enabled
+# Resource: aws_eks_cluster.main (eks/main.tf)
+# Justification: Public endpoint access is intentional to allow DevOps engineers to
+# reach the Kubernetes API from local workstations and office VPNs without requiring
+# a VPC-internal bastion host. The exposure is compensated by var.admin_allowed_cidrs,
+# which must be locked down to specific office/VPN CIDRs at production deploy time
+# (see README section 9 and production.tfvars). The default 0.0.0.0/0 is acceptable
+# for testing environments only.
+AVD-AWS-0040
+
+# AWS-0041 – EKS cluster allows access from public CIDR 0.0.0.0/0
+# Resource: aws_eks_cluster.main (eks/main.tf)
+# Justification: The default value of var.admin_allowed_cidrs is intentionally open
+# (0.0.0.0/0) to allow frictionless testing deployments. For production, this variable
+# must be explicitly overridden with the team's static office egress IP(s) and VPN exit
+# CIDR(s) in production.tfvars. The CI pipeline enforces this by requiring
+# deletion_protection=true and specific CIDRs before a production apply is approved.
+AVD-AWS-0041
