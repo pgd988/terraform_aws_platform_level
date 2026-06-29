@@ -6,12 +6,12 @@ variable "aws_region" {
 
 variable "vpc_ssm_path" {
   type    = string
-  default = "/platform/vpc/id"
+  default = "/infra/networking/vpc_id"
 }
 
 variable "public_subnets_ssm_path" {
   type    = string
-  default = "/platform/vpc/public_subnets"
+  default = "/infra/networking/public_subnets"
 }
 
 variable "deploy_alb" {
@@ -28,7 +28,7 @@ variable "public_subnet_count" {
 
 variable "private_subnets_ssm_path" {
   type    = string
-  default = "/platform/vpc/private_subnets"
+  default = "/infra/networking/private_subnets"
 }
 
 variable "deletion_protection" {

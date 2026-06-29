@@ -6,17 +6,17 @@ variable "aws_region" {
 
 variable "vpc_ssm_path" {
   type    = string
-  default = "/platform/vpc/id"
+  default = "/infra/networking/vpc_id"
 }
 
 variable "private_subnets_ssm_path" {
   type    = string
-  default = "/platform/vpc/private_subnets"
+  default = "/infra/networking/private_subnets"
 }
 
 variable "default_sg_ssm_path" {
   type    = string
-  default = "/platform/vpc/default_sg"
+  default = "/infra/networking/default_security_group_id"
 }
 
 variable "deploy_gitlab" {
@@ -41,7 +41,7 @@ variable "deploy_monitoring" {
 
 variable "public_subnets_ssm_path" {
   type    = string
-  default = "/platform/vpc/public_subnets"
+  default = "/infra/networking/public_subnets"
 }
 
 variable "deletion_protection" {

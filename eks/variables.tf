@@ -6,12 +6,12 @@ variable "aws_region" {
 
 variable "vpc_ssm_path" {
   type    = string
-  default = "/platform/vpc/id"
+  default = "/infra/networking/vpc_id"
 }
 
 variable "private_subnets_ssm_path" {
   type    = string
-  default = "/platform/vpc/private_subnets"
+  default = "/infra/networking/private_subnets"
 }
 
 variable "deploy_eks" {
