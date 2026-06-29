@@ -39,10 +39,56 @@ rds_custom_parameters = {
 }
 ```
 
-### 4. Critical Resource Deletion Safeguards
-All core infrastructure components (Application Load Balancer, EKS Cluster & Node Groups, RDS PostgreSQL, DynamoDB tables, and EC2 VMs) are protected against accidental destruction via native AWS API termination locks or strict Terraform lifecycle guards.
+### 4. Deletion Protection — Variable-Controlled with Lifecycle Exception
 
-**Rule of Thumb**: Once any critical component has been deployed via variable toggles, setting its deploy flag to `false` will be rejected during `apply`. To intentionally decommission a resource, you must first explicitly remove or disable its delete protection lock before attempting destruction.
+All modules expose a `deletion_protection` variable (default: **`false`**) that controls API-level resource deletion guards across the entire stack. This makes the configs safe to deploy and tear down freely for **testing** by default, while supporting full hardening for **production** deployments.
+
+#### What `deletion_protection = true` enables
+
+| Module | Resource | AWS Attribute |
+|---|---|---|
+| `compute` | All EC2 instances | `disable_api_termination` |
+| `load_balancer` | ALB, NLB | `enable_deletion_protection` |
+| `databases` | RDS PostgreSQL | `deletion_protection` |
+| `databases` | DynamoDB table | `deletion_protection_enabled` |
+
+#### Enabling for a production deployment
+
+Pass the variable at plan/apply time or via a `production.tfvars` file:
+
+```bash
+terraform apply -var="deletion_protection=true"
+```
+
+or in a `production.tfvars`:
+
+```hcl
+deletion_protection = true
+```
+
+#### ⚠️ Terraform `lifecycle { prevent_destroy }` — manual code change required
+
+**`lifecycle { prevent_destroy = true }` cannot be controlled by a variable.** This is a hard Terraform language constraint: lifecycle arguments are evaluated at parse time, before variable resolution. No workaround exists within standard Terraform.
+
+Resources that previously used `prevent_destroy = true` (EKS Cluster, EKS Node Group, NLB Security Group, ALB Security Group, Elastic IPs) have had those blocks **removed** from the codebase so that `terraform destroy` works freely by default.
+
+**Before a production deployment**, you must manually add `lifecycle { prevent_destroy = true }` back into the relevant resource blocks in code:
+
+- `eks/main.tf` → `aws_eks_cluster.main` and `aws_eks_node_group.main`
+- `load_balancer/main.tf` → `aws_security_group.nlb_cloudflare`, `aws_security_group.alb_locked`, and `aws_eip.nlb`
+
+Example:
+
+```hcl
+resource "aws_eks_cluster" "main" {
+  # ...
+  lifecycle {
+    prevent_destroy = true
+  }
+}
+```
+
+This code change should be committed as part of a dedicated production promotion branch and code review.
 
 ### 5. Static External IP Bridge (NLB Chaining to ALB)
 Because AWS Application Load Balancers scale IP addresses dynamically and cannot attach static Elastic IPs directly, the `load_balancer` module implements an HCL **NLB Chaining Bridge** (`deploy_alb = true`).
@@ -74,23 +120,23 @@ While worker nodes and application workloads run strictly within isolated privat
 
 ## Terraform Backend Setup (S3 & DynamoDB)
 
-Each directory relies on an S3 backend with DynamoDB state locking. Because the bucket and table are managed by another repository (networking/organization repo), the `backend "s3" {}` block in each directory's `backend.tf` is intentionally left partially empty.
+Each module uses a fully configured S3 backend defined in its `backend.tf`. The bucket, state key, DynamoDB lock table, and encryption are all hardcoded:
 
-You **must** provide the backend configuration parameters during the `terraform init` phase. 
+| Setting | Value |
+|---|---|
+| S3 bucket | `core-infra-terraform-state-bucket` |
+| DynamoDB lock table | `core-infra-terraform-state-locks` |
+| State key | `<module-name>/terraform.tfstate` |
+| Encryption | `true` |
 
-### How to Initialize
-
-Navigate to the directory you wish to work on (e.g., `cd compute`), and run the initialization command, passing the variables manually:
+The only value supplied at init time is the **AWS region**, which is passed via `-backend-config`:
 
 ```bash
-terraform init \
-  -backend-config="bucket=<YOUR_S3_BUCKET_NAME>" \
-  -backend-config="key=platform-level/compute/terraform.tfstate" \
-  -backend-config="region=<AWS_REGION>" \
-  -backend-config="dynamodb_table=<YOUR_DYNAMODB_TABLE_NAME>"
+cd compute
+terraform init -backend-config="region=eu-central-1"
 ```
 
-*Be sure to change the `key` path for each directory to ensure states do not overlap (e.g., `platform-level/eks/terraform.tfstate` for the EKS directory).*
+> The S3 bucket and DynamoDB table are managed by a separate networking/bootstrap repository and must exist before running `terraform init` in any module here.
 
 ## Network & Foundation Dependencies
 

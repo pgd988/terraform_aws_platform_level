@@ -1,7 +1,7 @@
 variable "aws_region" {
   description = "AWS region"
   type        = string
-  default     = "us-east-1"
+  default     = "eu-central-1"
 }
 
 variable "vpc_ssm_path" {
@@ -76,4 +76,10 @@ variable "rds_custom_parameters" {
   description = "Custom database flags/parameters for PostgreSQL (map of flag name to value)"
   type        = map(string)
   default     = {}
+}
+
+variable "deletion_protection" {
+  description = "Enable deletion protection on supported resources (RDS, DynamoDB). Set to true for production deployments."
+  type        = bool
+  default     = false
 }

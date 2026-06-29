@@ -1,7 +1,7 @@
 variable "aws_region" {
   description = "AWS region"
   type        = string
-  default     = "us-east-1"
+  default     = "eu-central-1"
 }
 
 variable "vpc_ssm_path" {
@@ -29,4 +29,10 @@ variable "public_subnet_count" {
 variable "private_subnets_ssm_path" {
   type    = string
   default = "/platform/vpc/private_subnets"
+}
+
+variable "deletion_protection" {
+  description = "Enable deletion protection on supported resources (ALB, NLB, EIPs). Set to true for production deployments."
+  type        = bool
+  default     = false
 }

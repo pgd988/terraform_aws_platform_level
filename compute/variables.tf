@@ -1,7 +1,7 @@
 variable "aws_region" {
   description = "AWS region"
   type        = string
-  default     = "us-east-1"
+  default     = "eu-central-1"
 }
 
 variable "vpc_ssm_path" {
@@ -21,17 +21,17 @@ variable "default_sg_ssm_path" {
 
 variable "deploy_gitlab" {
   type    = bool
-  default = true
+  default = false
 }
 
 variable "deploy_rabbitmq" {
   type    = bool
-  default = true
+  default = false
 }
 
 variable "deploy_mongodb" {
   type    = bool
-  default = true
+  default = false
 }
 
 variable "deploy_monitoring" {
@@ -42,4 +42,10 @@ variable "deploy_monitoring" {
 variable "public_subnets_ssm_path" {
   type    = string
   default = "/platform/vpc/public_subnets"
+}
+
+variable "deletion_protection" {
+  description = "Enable deletion protection on supported resources (disable_api_termination on EC2). Set to true for production deployments."
+  type        = bool
+  default     = false
 }

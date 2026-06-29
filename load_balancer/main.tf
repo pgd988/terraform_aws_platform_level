@@ -71,7 +71,7 @@ resource "aws_security_group" "nlb_cloudflare" {
   }
 
   lifecycle {
-    prevent_destroy = true
+    prevent_destroy = false
   }
 }
 
@@ -107,7 +107,7 @@ resource "aws_security_group" "alb_locked" {
   }
 
   lifecycle {
-    prevent_destroy = true
+    prevent_destroy = false
   }
 }
 
@@ -131,7 +131,7 @@ resource "aws_lb" "main" {
   security_groups            = [aws_security_group.alb_locked[0].id]
   subnets                    = local.private_subnets
   drop_invalid_header_fields = true
-  enable_deletion_protection = true
+  enable_deletion_protection = var.deletion_protection
 }
 
 # Target Group for EKS Default NGINX Sink
@@ -199,7 +199,7 @@ resource "aws_eip" "nlb" {
   }
 
   lifecycle {
-    prevent_destroy = true
+    prevent_destroy = false
   }
 }
 
@@ -209,7 +209,7 @@ resource "aws_lb" "nlb" {
   name                       = "platform-static-nlb"
   load_balancer_type         = "network"
   security_groups            = [aws_security_group.nlb_cloudflare[0].id]
-  enable_deletion_protection = true
+  enable_deletion_protection = var.deletion_protection
 
   dynamic "subnet_mapping" {
     for_each = range(var.public_subnet_count)

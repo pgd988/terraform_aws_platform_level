@@ -1,7 +1,7 @@
 variable "aws_region" {
   description = "AWS region"
   type        = string
-  default     = "us-east-1"
+  default     = "eu-central-1"
 }
 
 variable "vpc_ssm_path" {
@@ -27,7 +27,7 @@ variable "eks_cluster_name" {
 variable "node_instance_types" {
   description = "List of EC2 instance types for the default EKS managed node group"
   type        = list(string)
-  default     = ["t3.medium"]
+  default     = ["t3.micro"]
 }
 
 variable "alb_sg_ssm_path" {
@@ -45,4 +45,10 @@ variable "eks_admins_ssm_path" {
   description = "SSM Parameter path for the IAM group ARN of EKS Admins"
   type        = string
   default     = "/platform/iam/eks_admins_arn"
+}
+
+variable "deletion_protection" {
+  description = "Enable deletion protection on supported resources (EKS API-level). Set to true for production deployments."
+  type        = bool
+  default     = false
 }

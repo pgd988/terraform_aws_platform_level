@@ -8,7 +8,7 @@ resource "aws_dynamodb_table" "main" {
   name                        = "platform-generic-table"
   billing_mode                = "PAY_PER_REQUEST"
   hash_key                    = "id"
-  deletion_protection_enabled = true
+  deletion_protection_enabled = var.deletion_protection
 
   attribute {
     name = "id"
@@ -76,7 +76,7 @@ resource "aws_db_instance" "main" {
   db_subnet_group_name        = aws_db_subnet_group.rds[0].name
   vpc_security_group_ids      = [data.aws_ssm_parameter.rds_sg.value]
   skip_final_snapshot         = false
-  deletion_protection         = true
+  deletion_protection         = var.deletion_protection
 }
 
 # Export RDS Endpoint via SSM

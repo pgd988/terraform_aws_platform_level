@@ -7,11 +7,11 @@ locals {
 resource "aws_instance" "gitlab" {
   count                   = var.deploy_gitlab ? 1 : 0
   ami                     = data.aws_ami.amazon_linux.id
-  instance_type           = "t3.medium"
+  instance_type           = "t3.micro"
   subnet_id               = local.public_subnets[0]
   vpc_security_group_ids  = [data.aws_ssm_parameter.default_sg.value]
   iam_instance_profile    = "gitlab-ec2-profile" 
-  disable_api_termination = true
+  disable_api_termination = var.deletion_protection
 
   metadata_options {
     http_tokens = "required"
@@ -29,11 +29,11 @@ resource "aws_instance" "gitlab" {
 resource "aws_instance" "rabbitmq" {
   count                   = var.deploy_rabbitmq ? 1 : 0
   ami                     = data.aws_ami.amazon_linux.id
-  instance_type           = "t3.medium"
+  instance_type           = "t3.micro"
   subnet_id               = local.private_subnets[0]
   vpc_security_group_ids  = [data.aws_ssm_parameter.default_sg.value]
   iam_instance_profile    = "rabbitmq-ec2-profile" 
-  disable_api_termination = true
+  disable_api_termination = var.deletion_protection
 
   metadata_options {
     http_tokens = "required"
@@ -51,11 +51,11 @@ resource "aws_instance" "rabbitmq" {
 resource "aws_instance" "mongodb" {
   count                   = var.deploy_mongodb ? 1 : 0
   ami                     = data.aws_ami.amazon_linux.id
-  instance_type           = "t3.medium"
+  instance_type           = "t3.micro"
   subnet_id               = local.private_subnets[0]
   vpc_security_group_ids  = [data.aws_ssm_parameter.default_sg.value]
   iam_instance_profile    = "mongodb-ec2-profile" 
-  disable_api_termination = true
+  disable_api_termination = var.deletion_protection
 
   metadata_options {
     http_tokens = "required"
@@ -73,11 +73,11 @@ resource "aws_instance" "mongodb" {
 resource "aws_instance" "monitoring" {
   count                   = var.deploy_monitoring ? 1 : 0
   ami                     = data.aws_ami.amazon_linux.id
-  instance_type           = "t3.medium"
+  instance_type           = "t3.micro"
   subnet_id               = local.public_subnets[0]
   vpc_security_group_ids  = [data.aws_ssm_parameter.default_sg.value]
   iam_instance_profile    = "monitoring-ec2-profile" 
-  disable_api_termination = true
+  disable_api_termination = var.deletion_protection
 
   metadata_options {
     http_tokens = "required"

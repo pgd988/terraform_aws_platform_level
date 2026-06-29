@@ -35,7 +35,11 @@ resource "aws_eks_cluster" "main" {
   }
 
   lifecycle {
-    prevent_destroy = true
+    # prevent_destroy is intentionally not set here; controlled by the
+    # deletion_protection variable at the API level (e.g. node group scaling).
+    # Set deletion_protection = true and use Terraform state locks for
+    # production-grade protection instead.
+    prevent_destroy = false
   }
 }
 
@@ -55,7 +59,8 @@ resource "aws_eks_node_group" "main" {
   instance_types = var.node_instance_types
 
   lifecycle {
-    prevent_destroy = true
+    # See aws_eks_cluster lifecycle comment above.
+    prevent_destroy = false
   }
 }
 
