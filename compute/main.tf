@@ -10,7 +10,7 @@ resource "aws_instance" "gitlab" {
   instance_type           = "t3.micro"
   subnet_id               = local.public_subnets[0]
   vpc_security_group_ids  = [data.aws_ssm_parameter.default_sg.value]
-  iam_instance_profile    = "gitlab-ec2-profile" 
+  iam_instance_profile    = aws_iam_instance_profile.gitlab.name
   disable_api_termination = var.deletion_protection
 
   metadata_options {
@@ -32,7 +32,7 @@ resource "aws_instance" "rabbitmq" {
   instance_type           = "t3.micro"
   subnet_id               = local.private_subnets[0]
   vpc_security_group_ids  = [data.aws_ssm_parameter.default_sg.value]
-  iam_instance_profile    = "rabbitmq-ec2-profile" 
+  iam_instance_profile    = aws_iam_instance_profile.rabbitmq.name
   disable_api_termination = var.deletion_protection
 
   metadata_options {
@@ -54,7 +54,7 @@ resource "aws_instance" "mongodb" {
   instance_type           = "t3.micro"
   subnet_id               = local.private_subnets[0]
   vpc_security_group_ids  = [data.aws_ssm_parameter.default_sg.value]
-  iam_instance_profile    = "mongodb-ec2-profile" 
+  iam_instance_profile    = aws_iam_instance_profile.mongodb.name
   disable_api_termination = var.deletion_protection
 
   metadata_options {
@@ -76,7 +76,7 @@ resource "aws_instance" "monitoring" {
   instance_type           = "t3.micro"
   subnet_id               = local.public_subnets[0]
   vpc_security_group_ids  = [data.aws_ssm_parameter.default_sg.value]
-  iam_instance_profile    = "monitoring-ec2-profile" 
+  iam_instance_profile    = aws_iam_instance_profile.monitoring.name
   disable_api_termination = var.deletion_protection
 
   metadata_options {
