@@ -128,10 +128,9 @@ jobs:
           retention-days: 7
 
   # ──────────────────────────────────────────────
-  # Job 2b – Terraform plan (Wave 2: eks)
-  # Depends on Wave 1. Reads alb_sg_id and eks_admins_arn
-  # from SSM after iam + load_balancer have been applied.
-  # On PRs (plan-only), passes empty strings so plan succeeds.
+  # Job 2b – Terraform plan (Wave 2: eks preliminary)
+  # Passes empty strings so plan succeeds during initial scan / PR checks.
+  # True plan with resolved SSM variables runs post-Wave 1 apply on push to main.
   # ──────────────────────────────────────────────
   terraform-plan-eks:
     name: Terraform Plan – eks
@@ -350,14 +349,88 @@ jobs:
         run: terraform apply -input=false -auto-approve tfplan.binary
 
   # ──────────────────────────────────────────────
-  # Job 3b – Terraform apply (Wave 2: eks)
-  # Reads alb_sg_id and eks_admins_arn from SSM after
-  # iam + load_balancer have been applied in Wave 1.
+  # Job 3b – Terraform plan (Wave 2: eks with resolved vars)
+  # Runs after Wave 1 apply on push to main. Reads resolved
+  # alb_sg_id and eks_admins_arn from SSM after iam + load_balancer apply.
+  # Produces tfplan.binary and plan summary for review before manual apply.
+  # ──────────────────────────────────────────────
+  terraform-plan-eks-resolved:
+    name: Terraform Plan – eks (Resolved Vars)
+    runs-on: ubuntu-latest
+    needs: terraform-apply-wave1
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: github-actions-tf-plan
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Read cross-module SSM outputs
+        id: ssm
+        run: |
+          echo "alb_sg_id=$(aws ssm get-parameter --name /platform/alb/security_group_id --query Parameter.Value --output text)" >> "$GITHUB_OUTPUT"
+          echo "eks_admins_arn=$(aws ssm get-parameter --name /platform/iam/eks_admins_arn --query Parameter.Value --output text)" >> "$GITHUB_OUTPUT"
+
+      - name: Terraform Init – eks
+        working-directory: eks
+        run: |
+          terraform init -input=false \
+            -backend-config="region=${{ env.AWS_REGION }}"
+
+      - name: Terraform Plan – eks (with resolved vars)
+        id: tf-plan
+        working-directory: eks
+        run: |
+          set -o pipefail
+          terraform plan \
+            -input=false \
+            -no-color \
+            -var="alb_sg_id=${{ steps.ssm.outputs.alb_sg_id }}" \
+            -var="eks_admins_arn=${{ steps.ssm.outputs.eks_admins_arn }}" \
+            -out=tfplan.binary 2>&1 | tee plan.txt
+          echo "exitcode=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
+
+      - name: Write plan summary to step summary
+        run: |
+          echo "## Terraform Plan – \`eks\` (Resolved Vars)" >> "$GITHUB_STEP_SUMMARY"
+          echo "\`\`\`" >> "$GITHUB_STEP_SUMMARY"
+          head -c 60000 eks/plan.txt >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "\`\`\`" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload plan artifact – eks (resolved)
+        uses: actions/upload-artifact@v4
+        with:
+          name: tfplan-eks-resolved-${{ github.run_id }}
+          path: |
+            eks/tfplan.binary
+            eks/plan.txt
+          retention-days: 2
+
+  # ──────────────────────────────────────────────
+  # Job 3c – Terraform apply (Wave 2: eks)
+  # Requires manual review/approval in the production environment
+  # after reviewing the plan produced by terraform-plan-eks-resolved.
   # ──────────────────────────────────────────────
   terraform-apply-eks:
     name: Terraform Apply – eks
     runs-on: ubuntu-latest
-    needs: terraform-apply-wave1
+    needs: terraform-plan-eks-resolved
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
 
     environment: production
@@ -382,34 +455,24 @@ jobs:
         with:
           terraform_version: ${{ env.TF_VERSION }}
 
-      - name: Read cross-module SSM outputs
-        id: ssm
-        run: |
-          echo "alb_sg_id=$(aws ssm get-parameter --name /platform/alb/security_group_id --query Parameter.Value --output text)" >> "$GITHUB_OUTPUT"
-          echo "eks_admins_arn=$(aws ssm get-parameter --name /platform/iam/eks_admins_arn --query Parameter.Value --output text)" >> "$GITHUB_OUTPUT"
-
       - name: Terraform Init – eks
         working-directory: eks
         run: |
           terraform init -input=false \
             -backend-config="region=${{ env.AWS_REGION }}"
 
-      - name: Terraform Plan – eks (with resolved vars)
-        working-directory: eks
-        run: |
-          terraform plan \
-            -input=false \
-            -no-color \
-            -var="alb_sg_id=${{ steps.ssm.outputs.alb_sg_id }}" \
-            -var="eks_admins_arn=${{ steps.ssm.outputs.eks_admins_arn }}" \
-            -out=tfplan.binary
+      - name: Download plan artifact – eks
+        uses: actions/download-artifact@v4
+        with:
+          name: tfplan-eks-resolved-${{ github.run_id }}
+          path: eks
 
       - name: Terraform Apply – eks
         working-directory: eks
         run: terraform apply -input=false -auto-approve tfplan.binary
 
   # ──────────────────────────────────────────────
-  # Job 3c – Terraform apply (Wave 3: remaining modules)
+  # Job 3d – Terraform apply (Wave 3: remaining modules)
   # Independent; run in parallel after plan passes.
   # ──────────────────────────────────────────────
   terraform-apply-wave3:
