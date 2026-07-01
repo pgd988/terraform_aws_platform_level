@@ -1,4 +1,4 @@
-# AWS Platform Level Services
+## AWS Platform Level Services
 
 This repository contains Terraform configurations for deploying platform-level services for the AWS account. The project is divided into separate directories, each maintaining its own independent Terraform state.
 
