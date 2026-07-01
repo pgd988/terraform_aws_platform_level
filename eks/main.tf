@@ -83,7 +83,7 @@ resource "aws_eks_node_group" "main" {
     min_size     = 1
   }
 
-  ami_type       = "AL2_x86_64"
+  ami_type       = "AL2023_x86_64_STANDARD"
   instance_types = var.node_instance_types
 
   # Explicit depends_on ensures IAM policies are fully attached before EC2 instances boot
