@@ -245,6 +245,10 @@ resource "aws_lb_target_group_attachment" "alb_443" {
   target_group_arn = aws_lb_target_group.nlb_to_alb_443[0].arn
   target_id        = aws_lb.main[0].arn
   port             = 443
+
+  depends_on = [
+    aws_lb_listener.https
+  ]
 }
 
 resource "aws_lb_target_group_attachment" "alb_80" {
@@ -252,6 +256,10 @@ resource "aws_lb_target_group_attachment" "alb_80" {
   target_group_arn = aws_lb_target_group.nlb_to_alb_80[0].arn
   target_id        = aws_lb.main[0].arn
   port             = 80
+
+  depends_on = [
+    aws_lb_listener.http
+  ]
 }
 
 # 5. NLB TCP Listeners

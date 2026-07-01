@@ -17,7 +17,7 @@ variable "public_subnets_ssm_path" {
 variable "deploy_alb" {
   description = "Switch to deploy Application Load Balancer and its chained Network Load Balancer entrypoint"
   type        = bool
-  default     = true
+  default     = false
 }
 
 variable "public_subnet_count" {
