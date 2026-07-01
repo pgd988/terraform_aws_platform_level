@@ -18,22 +18,7 @@ resource "aws_iam_role_policy_attachment" "eks_cluster_policy" {
   role       = aws_iam_role.eks_cluster.name
 }
 
-resource "aws_iam_role" "eks_node" {
-  name               = "eks-node-role"
-  assume_role_policy = data.aws_iam_policy_document.ec2_assume_role.json
-}
-resource "aws_iam_role_policy_attachment" "eks_worker_node" {
-  policy_arn = "arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy"
-  role       = aws_iam_role.eks_node.name
-}
-resource "aws_iam_role_policy_attachment" "eks_cni" {
-  policy_arn = "arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy"
-  role       = aws_iam_role.eks_node.name
-}
-resource "aws_iam_role_policy_attachment" "eks_registry" {
-  policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
-  role       = aws_iam_role.eks_node.name
-}
+
 
 # IAM Group for EKS Administrators
 resource "aws_iam_group" "eks_admins" {

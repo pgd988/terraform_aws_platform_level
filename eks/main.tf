@@ -2,6 +2,24 @@ locals {
   private_subnets = split(",", data.aws_ssm_parameter.private_subnets.value)
 }
 
+# EKS Node IAM Role
+resource "aws_iam_role" "eks_node" {
+  name               = "eks-node-role"
+  assume_role_policy = data.aws_iam_policy_document.ec2_assume_role.json
+}
+resource "aws_iam_role_policy_attachment" "eks_worker_node" {
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy"
+  role       = aws_iam_role.eks_node.name
+}
+resource "aws_iam_role_policy_attachment" "eks_cni" {
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy"
+  role       = aws_iam_role.eks_node.name
+}
+resource "aws_iam_role_policy_attachment" "eks_registry" {
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
+  role       = aws_iam_role.eks_node.name
+}
+
 resource "aws_kms_key" "eks" {
   count                   = var.deploy_eks ? 1 : 0
   description             = "EKS Secret Encryption Key"
@@ -47,7 +65,7 @@ resource "aws_eks_node_group" "main" {
   count           = var.deploy_eks ? 1 : 0
   cluster_name    = aws_eks_cluster.main[0].name
   node_group_name = "default-node-group"
-  node_role_arn   = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/eks-node-role"
+  node_role_arn   = aws_iam_role.eks_node.arn
   subnet_ids      = local.private_subnets
 
   scaling_config {

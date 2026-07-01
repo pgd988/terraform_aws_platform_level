@@ -4,8 +4,9 @@ This repository contains Terraform configurations for deploying platform-level s
 
 ## Directory Structure
 
-- `compute`: EC2 instance configurations (GitLab, RabbitMQ, MongoDB, Monitoring).
+- `compute`: EC2 instance configurations (GitLab, RabbitMQ, MongoDB, Monitoring), including per-service IAM roles and EC2 instance profiles (`instance_profiles.tf`).
 - `eks`: Amazon EKS cluster, node groups, add-ons (Pod Identity Agent), and foundational tooling:
+  - **EKS Node IAM Role**: `aws_iam_role.eks_node` and its three managed policy attachments (WorkerNode, CNI, ECR) are declared here, co-located with the node group that consumes them.
   - **Argo Suite**: ArgoCD, Argo Rollouts, and Argo Events via Helm.
   - **AWS Load Balancer Controller**: Configured with strict EKS Pod Identity Least Privilege Principle (PoLP).
   - `apps/`: Default Kubernetes workloads deployed via Helm (e.g., default NGINX sink returning 403).
@@ -14,7 +15,7 @@ This repository contains Terraform configurations for deploying platform-level s
 - `databases`: ElastiCache for Redis, conditional Amazon RDS PostgreSQL, and generic DynamoDB templates.
 - `monitoring`: CloudWatch dashboards and alarms.
 - `logging`: Centralized logging configurations.
-- `iam`: Identity and Access Management roles and policies.
+- `iam`: Cluster-level IAM resources and shared policies — EKS cluster role (`eks-cluster-role`), EKS Admins IAM group, and the AWS Load Balancer Controller IAM policy. EC2 instance roles are managed in `compute`; the EKS node role is managed in `eks`.
 
 ## Architectural Highlights
 
@@ -117,6 +118,17 @@ By chaining boundaries this way, your Kubernetes pods have zero path to be reach
 While worker nodes and application workloads run strictly within isolated private subnets, the EKS Kubernetes control plane is configured for remote administration:
 - **API Endpoint Accessibility**: Enabled dual endpoint reachability (`endpoint_private_access = true`, `endpoint_public_access = true`), allowing DevOps engineers to reach the cluster API securely from local workstations or office VPNs. Source IP whitelisting can be enforced via `var.admin_allowed_cidrs`.
 - **Centralized IAM Group Binding (`eks_admins`)**: To avoid hardcoding individual user ARNs, the `iam` module creates a centralized `aws_iam_group.eks_admins` and exports its ARN to SSM (`/platform/iam/eks_admins_arn`). The `eks` module dynamically binds this group ARN directly to `AmazonEKSClusterAdminPolicy` via AWS EKS Access Entries (`API_AND_CONFIG_MAP`).
+
+### 10. IAM Ownership Split by Concern
+To keep IAM resources co-located with the infrastructure that consumes them, roles and profiles are split across three modules:
+
+| Module | IAM Resources Owned |
+|---|---|
+| `iam` | `eks-cluster-role` (EKS control plane trust), `eks_admins` IAM group, LBC IAM policy |
+| `eks` | `eks-node-role` + WorkerNode / CNI / ECR policy attachments |
+| `compute` | Per-service EC2 roles & instance profiles: `gitlab`, `rabbitmq`, `mongodb`, `monitoring` |
+
+This avoids cross-module dependencies and ensures each module is self-contained: the `eks` module declares and consumes the node role directly (`aws_iam_role.eks_node.arn`), and the `compute` module manages the full lifecycle of its EC2 instance profiles.
 
 ## Terraform Backend Setup (S3 & DynamoDB)
 
