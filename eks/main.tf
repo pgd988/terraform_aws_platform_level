@@ -19,6 +19,14 @@ resource "aws_iam_role_policy_attachment" "eks_registry" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
   role       = aws_iam_role.eks_node.name
 }
+resource "aws_iam_role_policy_attachment" "eks_cloudwatch_agent" {
+  policy_arn = "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"
+  role       = aws_iam_role.eks_node.name
+}
+resource "aws_iam_role_policy_attachment" "eks_ssm" {
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+  role       = aws_iam_role.eks_node.name
+}
 
 resource "aws_kms_key" "eks" {
   count                   = var.deploy_eks ? 1 : 0
@@ -66,7 +74,8 @@ resource "aws_eks_node_group" "main" {
   cluster_name    = aws_eks_cluster.main[0].name
   node_group_name = "default-node-group"
   node_role_arn   = aws_iam_role.eks_node.arn
-  subnet_ids      = local.private_subnets
+  # Restrict node pool to eu-central-1a (primary private subnet)
+  subnet_ids      = [local.private_subnets[0]]
 
   scaling_config {
     desired_size = 2
@@ -75,6 +84,15 @@ resource "aws_eks_node_group" "main" {
   }
 
   instance_types = var.node_instance_types
+
+  # Explicit depends_on ensures IAM policies are fully attached before EC2 instances boot
+  depends_on = [
+    aws_iam_role_policy_attachment.eks_worker_node,
+    aws_iam_role_policy_attachment.eks_cni,
+    aws_iam_role_policy_attachment.eks_registry,
+    aws_iam_role_policy_attachment.eks_cloudwatch_agent,
+    aws_iam_role_policy_attachment.eks_ssm,
+  ]
 
   lifecycle {
     # See aws_eks_cluster lifecycle comment above.
@@ -86,6 +104,13 @@ resource "aws_eks_addon" "pod_identity" {
   count        = var.deploy_eks ? 1 : 0
   cluster_name = aws_eks_cluster.main[0].name
   addon_name   = "eks-pod-identity-agent"
+}
+
+resource "aws_eks_addon" "cloudwatch_observability" {
+  count        = var.deploy_eks ? 1 : 0
+  cluster_name = aws_eks_cluster.main[0].name
+  addon_name   = "amazon-cloudwatch-observability"
+  depends_on   = [aws_eks_node_group.main]
 }
 
 # Zero-trust EKS boundary allowing ingress strictly from ALB Security Group
