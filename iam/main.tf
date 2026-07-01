@@ -25,6 +25,22 @@ resource "aws_iam_group" "eks_admins" {
   name = "eks_admins"
 }
 
+# Assumable IAM Role for EKS Administrators (Kubernetes RBAC ClusterAdmin)
+data "aws_iam_policy_document" "eks_admin_assume_role" {
+  statement {
+    actions = ["sts:AssumeRole"]
+    principals {
+      type        = "AWS"
+      identifiers = ["arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"]
+    }
+  }
+}
+
+resource "aws_iam_role" "eks_admin" {
+  name               = "eks-admin-role"
+  assume_role_policy = data.aws_iam_policy_document.eks_admin_assume_role.json
+}
+
 resource "aws_iam_group_policy" "eks_admins" {
   name  = "EKSAdminFullAccessPolicy"
   group = aws_iam_group.eks_admins.name
@@ -61,16 +77,22 @@ resource "aws_iam_group_policy" "eks_admins" {
           "autoscaling:UpdateAutoScalingGroup"
         ]
         Resource = "*"
+      },
+      {
+        Sid      = "AssumeEKSAdminRole"
+        Effect   = "Allow"
+        Action   = ["sts:AssumeRole"]
+        Resource = [aws_iam_role.eks_admin.arn]
       }
     ]
   })
 }
 
-# Export IAM Group ARN via SSM
+# Export EKS Admin Role ARN via SSM (EKS Access Entry requires Role/User, not Group)
 resource "aws_ssm_parameter" "eks_admins_arn" {
   name  = "/platform/iam/eks_admins_arn"
   type  = "String"
-  value = aws_iam_group.eks_admins.arn
+  value = aws_iam_role.eks_admin.arn
 }
 
 # IAM Policy for AWS Load Balancer Controller (IRSA)

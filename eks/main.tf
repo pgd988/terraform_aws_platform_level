@@ -83,6 +83,7 @@ resource "aws_eks_node_group" "main" {
     min_size     = 1
   }
 
+  ami_type       = "AL2_x86_64"
   instance_types = var.node_instance_types
 
   # Explicit depends_on ensures IAM policies are fully attached before EC2 instances boot
@@ -125,7 +126,7 @@ resource "aws_security_group_rule" "alb_to_eks" {
   description              = "Allow application traffic strictly from ALB Security Group"
 }
 
-# Grant EKS Admins IAM Group ClusterAdmin kubectl permissions
+# Grant EKS Admins IAM Role ClusterAdmin kubectl permissions
 resource "aws_eks_access_entry" "eks_admins" {
   count         = var.deploy_eks ? 1 : 0
   cluster_name  = aws_eks_cluster.main[0].name

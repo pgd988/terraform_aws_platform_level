@@ -10,3 +10,8 @@ output "eks_admins_group_arn" {
   description = "IAM Group ARN for EKS Administrators"
   value       = aws_iam_group.eks_admins.arn
 }
+
+output "eks_admins_role_arn" {
+  description = "Assumable IAM Role ARN for EKS Administrators (ClusterAdmin)"
+  value       = aws_iam_role.eks_admin.arn
+}
