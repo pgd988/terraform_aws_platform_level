@@ -25,6 +25,47 @@ resource "aws_iam_group" "eks_admins" {
   name = "eks_admins"
 }
 
+resource "aws_iam_group_policy" "eks_admins" {
+  name  = "EKSAdminFullAccessPolicy"
+  group = aws_iam_group.eks_admins.name
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "EKSClusterAdministration"
+        Effect = "Allow"
+        Action = [
+          "eks:*",
+          "ec2:*",
+          "logs:*",
+          "monitoring:*",
+          "cloudwatch:*",
+          "iam:ListRoles",
+          "iam:GetRole",
+          "iam:PassRole",
+          "iam:ListAttachedRolePolicies",
+          "iam:CreateServiceLinkedRole",
+          "kms:DescribeKey",
+          "kms:ListKeys",
+          "kms:CreateGrant",
+          "ssm:GetParameter",
+          "ssm:GetParameters",
+          "ssm:StartSession",
+          "ecr:GetAuthorizationToken",
+          "ecr:BatchCheckLayerAvailability",
+          "ecr:GetDownloadUrlForLayer",
+          "ecr:DescribeRepositories",
+          "ecr:ListImages",
+          "autoscaling:DescribeAutoScalingGroups",
+          "autoscaling:UpdateAutoScalingGroup"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
+}
+
 # Export IAM Group ARN via SSM
 resource "aws_ssm_parameter" "eks_admins_arn" {
   name  = "/platform/iam/eks_admins_arn"
