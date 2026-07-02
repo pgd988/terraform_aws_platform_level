@@ -9,9 +9,7 @@ This repository contains Terraform configurations for deploying platform-level s
   - **EKS Node IAM Role**: `aws_iam_role.eks_node` and its five managed policy attachments (WorkerNode, CNI, ECR, CloudWatchAgentServerPolicy, AmazonSSMManagedInstanceCore) are declared here. Explicit `depends_on` in `aws_eks_node_group.main` guarantees IAM propagation completes before EC2 instances boot.
   - **Single-AZ Node Pool**: The default node group is restricted to run worker nodes in `eu-central-1a`.
   - **Node Monitoring**: Uses the `amazon-cloudwatch-observability` EKS managed add-on to deploy the CloudWatch Agent DaemonSet and Fluent Bit telemetry collectors across worker nodes.
-  - **Argo Suite**: ArgoCD, Argo Rollouts, and Argo Events via Helm.
-  - **AWS Load Balancer Controller**: Configured with strict EKS Pod Identity Least Privilege Principle (PoLP).
-  - `apps/`: Default Kubernetes workloads deployed via Helm (e.g., default NGINX sink returning 403).
+  - `apps/`: All Kubernetes workloads deployed via Helm (default NGINX sink returning 403, Argo CD, Argo Rollouts, Argo Events, and AWS Load Balancer Controller k8s resources). Controlled by the `deploy_apps` feature toggle (`false` by default) to prevent connection errors during initial cluster bootstrap.
   - `policies/`: Self-hosted JSON IAM policies for EKS add-ons.
 - `load_balancer`: Application Load Balancer with self-signed SSL/TLS termination and direct pod IP target group routing.
 - `databases`: ElastiCache for Redis, conditional Amazon RDS PostgreSQL, and generic DynamoDB templates.

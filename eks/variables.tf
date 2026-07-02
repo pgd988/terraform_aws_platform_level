@@ -19,6 +19,12 @@ variable "deploy_eks" {
   default = true
 }
 
+variable "deploy_apps" {
+  description = "Toggle deployment of default Kubernetes workloads/apps (NGINX, Argo CD, AWS Load Balancer Controller, etc.)"
+  type        = bool
+  default     = false
+}
+
 variable "eks_cluster_name" {
   type    = string
   default = "platform-cluster"

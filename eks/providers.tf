@@ -41,14 +41,14 @@ data "aws_eks_cluster_auth" "main" {
 
 provider "helm" {
   kubernetes {
-    host                   = try(aws_eks_cluster.main[0].endpoint, "")
-    cluster_ca_certificate = try(base64decode(aws_eks_cluster.main[0].certificate_authority[0].data), "")
-    token                  = try(data.aws_eks_cluster_auth.main[0].token, "")
+    host                   = var.deploy_eks ? aws_eks_cluster.main[0].endpoint : null
+    cluster_ca_certificate = var.deploy_eks ? base64decode(aws_eks_cluster.main[0].certificate_authority[0].data) : null
+    token                  = var.deploy_eks ? data.aws_eks_cluster_auth.main[0].token : null
   }
 }
 
 provider "kubernetes" {
-  host                   = try(aws_eks_cluster.main[0].endpoint, "")
-  cluster_ca_certificate = try(base64decode(aws_eks_cluster.main[0].certificate_authority[0].data), "")
-  token                  = try(data.aws_eks_cluster_auth.main[0].token, "")
+  host                   = var.deploy_eks ? aws_eks_cluster.main[0].endpoint : null
+  cluster_ca_certificate = var.deploy_eks ? base64decode(aws_eks_cluster.main[0].certificate_authority[0].data) : null
+  token                  = var.deploy_eks ? data.aws_eks_cluster_auth.main[0].token : null
 }
