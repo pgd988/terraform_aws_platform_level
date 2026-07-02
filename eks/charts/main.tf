@@ -5,7 +5,7 @@ resource "helm_release" "cloudwatch_observability" {
   chart            = "amazon-cloudwatch-observability"
   namespace        = "amazon-cloudwatch"
   create_namespace = true
-  version          = "3.3.1"
+  version          = "6.2.0"
   wait             = false
 
   values = [
