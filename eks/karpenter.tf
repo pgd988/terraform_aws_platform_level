@@ -138,6 +138,20 @@ resource "aws_eks_pod_identity_association" "karpenter" {
   depends_on = [kubernetes_service_account.karpenter]
 }
 
+# Optional Knative logging config to silence LOGGING_CONFIGMAP_NOT_FOUND notices
+resource "kubernetes_config_map" "karpenter_logging" {
+  count = var.deploy_eks ? 1 : 0
+  metadata {
+    name      = "config-logging"
+    namespace = "karpenter"
+  }
+  data = {
+    "loglevel.controller" = "info"
+    "loglevel.webhook"    = "error"
+  }
+  depends_on = [kubernetes_namespace.karpenter]
+}
+
 # Helm Release for Karpenter Controller
 resource "helm_release" "karpenter" {
   count            = var.deploy_eks ? 1 : 0
@@ -150,6 +164,16 @@ resource "helm_release" "karpenter" {
 
   values = [
     <<EOF
+logLevel: info
+dnsPolicy: Default
+controller:
+  resources:
+    requests:
+      cpu: 1
+      memory: 1Gi
+    limits:
+      cpu: 1
+      memory: 1Gi
 settings:
   clusterName: ${var.eks_cluster_name}
   clusterEndpoint: ${aws_eks_cluster.main[0].endpoint}
@@ -161,7 +185,8 @@ EOF
 
   depends_on = [
     aws_eks_fargate_profile.karpenter,
-    aws_eks_pod_identity_association.karpenter
+    aws_eks_pod_identity_association.karpenter,
+    kubernetes_config_map.karpenter_logging
   ]
 }
 
