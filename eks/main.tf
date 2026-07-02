@@ -85,7 +85,7 @@ resource "aws_eks_addon" "cloudwatch_observability" {
 
 # Zero-trust EKS boundary allowing ingress strictly from ALB Security Group
 resource "aws_security_group_rule" "alb_to_eks" {
-  count                    = var.deploy_eks ? 1 : 0
+  count                    = var.deploy_eks && var.alb_sg_id != "" ? 1 : 0
   type                     = "ingress"
   from_port                = 80
   to_port                  = 8080
