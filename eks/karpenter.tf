@@ -64,8 +64,37 @@ resource "aws_iam_policy" "karpenter_controller" {
           "ec2:DescribeInstanceTypeOfferings",
           "ec2:DescribeAvailabilityZones",
           "ec2:DescribeSpotPriceHistory",
-          "pricing:GetProducts",
           "ssm:GetParameter"
+        ]
+        Resource = "*"
+      },
+      {
+        Sid    = "KarpenterControllerASG"
+        Effect = "Allow"
+        Action = [
+          "autoscaling:DescribeAutoScalingGroups",
+          "autoscaling:DescribeAutoScalingInstances",
+          "autoscaling:DescribeLaunchConfigurations",
+          "autoscaling:DescribeTags",
+          "autoscaling:SetDesiredCapacity",
+          "autoscaling:TerminateInstanceInAutoScalingGroup"
+        ]
+        Resource = "*"
+      },
+      {
+        Sid    = "KarpenterControllerEKS"
+        Effect = "Allow"
+        Action = [
+          "eks:DescribeCluster"
+        ]
+        Resource = "*"
+      },
+      {
+        Sid    = "KarpenterControllerPricing"
+        Effect = "Allow"
+        Action = [
+          "pricing:GetProducts",
+          "pricing:GetAttributeValues"
         ]
         Resource = "*"
       },
@@ -74,6 +103,20 @@ resource "aws_iam_policy" "karpenter_controller" {
         Effect   = "Allow"
         Action   = "iam:PassRole"
         Resource = aws_iam_role.eks_node.arn
+      },
+      {
+        Sid      = "KarpenterControllerCreateSLR"
+        Effect   = "Allow"
+        Action   = "iam:CreateServiceLinkedRole"
+        Resource = "*"
+        Condition = {
+          StringEquals = {
+            "iam:AWSServiceName" = [
+              "spot.amazonaws.com",
+              "spotfleet.amazonaws.com"
+            ]
+          }
+        }
       }
     ]
   })
