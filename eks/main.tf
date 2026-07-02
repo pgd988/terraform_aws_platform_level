@@ -69,41 +69,6 @@ resource "aws_eks_cluster" "main" {
   }
 }
 
-resource "aws_eks_node_group" "main" {
-  count           = var.deploy_eks ? 1 : 0
-  cluster_name    = aws_eks_cluster.main[0].name
-  node_group_name = "default-node-group"
-  node_role_arn   = aws_iam_role.eks_node.arn
-  # Restrict node pool to eu-central-1a (primary private subnet)
-  subnet_ids      = [local.private_subnets[0]]
-
-  scaling_config {
-    desired_size = 2
-    max_size     = 4
-    min_size     = 1
-  }
-
-  node_repair_config {
-    enabled = true
-  }
-
-  ami_type       = "AL2023_x86_64_STANDARD"
-  instance_types = var.node_instance_types
-
-  # Explicit depends_on ensures IAM policies are fully attached before EC2 instances boot
-  depends_on = [
-    aws_iam_role_policy_attachment.eks_worker_node,
-    aws_iam_role_policy_attachment.eks_cni,
-    aws_iam_role_policy_attachment.eks_registry,
-    aws_iam_role_policy_attachment.eks_cloudwatch_agent,
-    aws_iam_role_policy_attachment.eks_ssm,
-  ]
-
-  lifecycle {
-    # See aws_eks_cluster lifecycle comment above.
-    prevent_destroy = false
-  }
-}
 
 resource "aws_eks_addon" "pod_identity" {
   count        = var.deploy_eks ? 1 : 0
@@ -154,7 +119,7 @@ resource "aws_eks_access_policy_association" "eks_admins" {
 module "apps" {
   source     = "./apps"
   count      = var.deploy_eks && var.deploy_apps ? 1 : 0
-  depends_on = [aws_eks_node_group.main]
+  depends_on = [helm_release.karpenter_defaults]
 
   eks_cluster_name = aws_eks_cluster.main[0].name
   lbc_role_arn     = aws_iam_role.lbc[0].arn

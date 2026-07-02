@@ -6,8 +6,8 @@ This repository contains Terraform configurations for deploying platform-level s
 
 - `compute`: EC2 instance configurations (GitLab, RabbitMQ, MongoDB, Monitoring), including per-service IAM roles and EC2 instance profiles (`instance_profiles.tf`).
 - `eks`: Amazon EKS cluster, node groups, add-ons (Pod Identity Agent, CloudWatch Observability), and foundational tooling:
-  - **EKS Node IAM Role**: `aws_iam_role.eks_node` and its five managed policy attachments (WorkerNode, CNI, ECR, CloudWatchAgentServerPolicy, AmazonSSMManagedInstanceCore) are declared here. Explicit `depends_on` in `aws_eks_node_group.main` guarantees IAM propagation completes before EC2 instances boot.
-  - **Single-AZ Node Pool**: The default node group is restricted to run worker nodes in `eu-central-1a`.
+  - **EKS Node IAM Role**: `aws_iam_role.eks_node` and its five managed policy attachments (WorkerNode, CNI, ECR, CloudWatchAgentServerPolicy, AmazonSSMManagedInstanceCore) are declared here.
+  - **Karpenter Node Autoscaler (Base Configuration)**: Replaces static managed node pools. Deploys the Karpenter controller on a dedicated EKS Fargate Profile (`karpenter` namespace via EKS Pod Identity) along with a default `EC2NodeClass` and `general` `NodePool` configured for `t3.micro` spot/on-demand instances (`limits: cpu 2000, memory 4000Gi`).
   - **Node Monitoring**: Uses the `amazon-cloudwatch-observability` EKS managed add-on to deploy the CloudWatch Agent DaemonSet and Fluent Bit telemetry collectors across worker nodes.
   - `apps/`: All Kubernetes workloads deployed via Helm (default NGINX sink returning 403, Argo CD, Argo Rollouts, Argo Events, and AWS Load Balancer Controller k8s resources). Controlled by the `deploy_apps` feature toggle (`false` by default) to prevent connection errors during initial cluster bootstrap.
   - `policies/`: Self-hosted JSON IAM policies for EKS add-ons.
@@ -75,7 +75,7 @@ Resources that previously used `prevent_destroy = true` (EKS Cluster, EKS Node G
 
 **Before a production deployment**, you must manually add `lifecycle { prevent_destroy = true }` back into the relevant resource blocks in code:
 
-- `eks/main.tf` → `aws_eks_cluster.main` and `aws_eks_node_group.main`
+- `eks/main.tf` → `aws_eks_cluster.main`
 - `load_balancer/main.tf` → `aws_security_group.nlb_cloudflare`, `aws_security_group.alb_locked`, and `aws_eip.nlb`
 
 Example:
