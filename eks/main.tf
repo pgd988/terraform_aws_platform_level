@@ -80,7 +80,7 @@ resource "aws_eks_addon" "cloudwatch_observability" {
   count        = var.deploy_eks ? 1 : 0
   cluster_name = aws_eks_cluster.main[0].name
   addon_name   = "amazon-cloudwatch-observability"
-  depends_on   = [aws_eks_node_group.main]
+  depends_on   = [helm_release.karpenter_defaults]
 }
 
 # Zero-trust EKS boundary allowing ingress strictly from ALB Security Group
