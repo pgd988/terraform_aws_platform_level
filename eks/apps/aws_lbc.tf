@@ -23,6 +23,7 @@ resource "helm_release" "lbc" {
   chart      = "aws-load-balancer-controller"
   namespace  = "kube-system"
   version    = "1.7.1"
+  wait       = false
 
   values = [
     <<EOF

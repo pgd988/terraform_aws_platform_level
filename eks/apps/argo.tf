@@ -11,6 +11,7 @@ resource "helm_release" "argocd" {
   chart      = "argo-cd"
   namespace  = kubernetes_namespace.argocd.metadata[0].name
   version    = "5.51.6"
+  wait       = false
 
   values = [
     <<EOF
@@ -34,6 +35,7 @@ resource "helm_release" "argo_rollouts" {
   chart      = "argo-rollouts"
   namespace  = kubernetes_namespace.argo_rollouts.metadata[0].name
   version    = "2.32.4"
+  wait       = false
 }
 
 # Argo Events
@@ -49,4 +51,5 @@ resource "helm_release" "argo_events" {
   chart      = "argo-events"
   namespace  = kubernetes_namespace.argo_events.metadata[0].name
   version    = "2.4.1"
+  wait       = false
 }

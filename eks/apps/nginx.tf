@@ -8,7 +8,8 @@ resource "helm_release" "default_nginx" {
   repository = "https://charts.bitnami.com/bitnami"
   chart      = "nginx"
   namespace  = "default"
-  version    = "18.1.5" 
+  version    = "18.1.5"
+  wait       = false 
 
   values = [
     <<EOF

@@ -189,6 +189,14 @@ resource "kubernetes_config_map" "karpenter_logging" {
     namespace = "karpenter"
   }
   data = {
+    "zap-logger-config" = jsonencode({
+      level             = "info"
+      development       = false
+      disableStacktrace = true
+      encoding          = "json"
+      outputPaths       = ["stdout"]
+      errorOutputPaths  = ["stderr"]
+    })
     "loglevel.controller" = "info"
     "loglevel.webhook"    = "error"
   }
@@ -204,6 +212,7 @@ resource "helm_release" "karpenter" {
   namespace        = "karpenter"
   version          = "1.2.1"
   create_namespace = false
+  wait             = false
 
   values = [
     <<EOF
@@ -245,6 +254,7 @@ resource "helm_release" "karpenter_defaults" {
   name      = "karpenter-defaults"
   chart     = "${path.module}/charts/karpenter-defaults"
   namespace = "karpenter"
+  wait      = false
 
   set {
     name  = "nodeRoleName"
