@@ -142,7 +142,7 @@ resource "aws_eks_pod_identity_association" "karpenter" {
 resource "kubernetes_config_map" "karpenter_logging" {
   count = var.deploy_eks ? 1 : 0
   metadata {
-    name      = "config-logging"
+    name      = "aws-logging"
     namespace = "karpenter"
   }
   data = {
@@ -174,6 +174,12 @@ controller:
     limits:
       cpu: 1
       memory: 1Gi
+livenessProbe:
+  timeoutSeconds: 60
+  initialDelaySeconds: 60
+readinessProbe:
+  timeoutSeconds: 60
+  initialDelaySeconds: 30
 settings:
   clusterName: ${var.eks_cluster_name}
   clusterEndpoint: ${aws_eks_cluster.main[0].endpoint}
