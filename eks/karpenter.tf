@@ -34,6 +34,13 @@ resource "aws_eks_fargate_profile" "karpenter" {
   selector {
     namespace = "karpenter"
   }
+
+  selector {
+    namespace = "kube-system"
+    labels = {
+      k8s-app = "kube-dns"
+    }
+  }
 }
 
 # IAM Policy for Karpenter Controller
@@ -219,6 +226,9 @@ resource "helm_release" "karpenter" {
 logLevel: info
 dnsPolicy: Default
 controller:
+  env:
+    - name: AWS_REGION
+      value: ${var.aws_region}
   resources:
     requests:
       cpu: 1

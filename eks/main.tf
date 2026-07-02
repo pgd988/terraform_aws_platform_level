@@ -70,17 +70,32 @@ resource "aws_eks_cluster" "main" {
 }
 
 
+resource "aws_eks_addon" "coredns" {
+  count        = var.deploy_eks ? 1 : 0
+  cluster_name = aws_eks_cluster.main[0].name
+  addon_name   = "coredns"
+
+  configuration_values = jsonencode({
+    computeType = "Fargate"
+  })
+
+  depends_on = [aws_eks_fargate_profile.karpenter]
+}
+
 resource "aws_eks_addon" "pod_identity" {
   count        = var.deploy_eks ? 1 : 0
   cluster_name = aws_eks_cluster.main[0].name
   addon_name   = "eks-pod-identity-agent"
 }
 
-resource "aws_eks_addon" "cloudwatch_observability" {
-  count        = var.deploy_eks ? 1 : 0
-  cluster_name = aws_eks_cluster.main[0].name
-  addon_name   = "amazon-cloudwatch-observability"
-  depends_on   = [helm_release.karpenter_defaults]
+# Base Cluster Helm Charts
+module "charts" {
+  source     = "./charts"
+  count      = var.deploy_eks ? 1 : 0
+  depends_on = [helm_release.karpenter_defaults]
+
+  eks_cluster_name = aws_eks_cluster.main[0].name
+  aws_region       = var.aws_region
 }
 
 # Zero-trust EKS boundary allowing ingress strictly from ALB Security Group
