@@ -43,6 +43,29 @@ resource "aws_eks_fargate_profile" "karpenter" {
   }
 }
 
+# Explicit security group rules to guarantee probe and webhook reachability on Fargate
+resource "aws_security_group_rule" "karpenter_probes" {
+  count                    = var.deploy_eks ? 1 : 0
+  type                     = "ingress"
+  from_port                = 8081
+  to_port                  = 8081
+  protocol                 = "tcp"
+  source_security_group_id = aws_eks_cluster.main[0].vpc_config[0].cluster_security_group_id
+  security_group_id        = aws_eks_cluster.main[0].vpc_config[0].cluster_security_group_id
+  description              = "Allow EKS control plane and kubelet liveness/readiness probes to Karpenter on port 8081"
+}
+
+resource "aws_security_group_rule" "karpenter_webhook" {
+  count                    = var.deploy_eks ? 1 : 0
+  type                     = "ingress"
+  from_port                = 8443
+  to_port                  = 8443
+  protocol                 = "tcp"
+  source_security_group_id = aws_eks_cluster.main[0].vpc_config[0].cluster_security_group_id
+  security_group_id        = aws_eks_cluster.main[0].vpc_config[0].cluster_security_group_id
+  description              = "Allow EKS control plane webhook requests to Karpenter on port 8443"
+}
+
 # IAM Policy for Karpenter Controller
 resource "aws_iam_policy" "karpenter_controller" {
   count       = var.deploy_eks ? 1 : 0
@@ -225,17 +248,13 @@ resource "helm_release" "karpenter" {
     <<EOF
 logLevel: info
 dnsPolicy: Default
+affinity: {}
+#tolerations:
+#  - operator: Exists
 controller:
   env:
     - name: AWS_REGION
       value: ${var.aws_region}
-  resources:
-    requests:
-      cpu: 1
-      memory: 1Gi
-    limits:
-      cpu: 1
-      memory: 1Gi
 livenessProbe:
   timeoutSeconds: 60
   initialDelaySeconds: 60
