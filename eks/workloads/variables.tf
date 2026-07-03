@@ -3,8 +3,8 @@ variable "eks_cluster_name" {
   type        = string
 }
 
-variable "lbc_role_arn" {
-  description = "IAM Role ARN for AWS Load Balancer Controller"
+variable "eks_cluster_arn" {
+  description = "EKS Cluster ARN"
   type        = string
 }
 
@@ -17,7 +17,7 @@ variable "deploy_aws_lbc" {
 variable "deploy_nginx" {
   description = "Toggle deployment of NGINX default backend"
   type        = bool
-  default     = true
+  default     = false
 }
 
 variable "deploy_argocd" {

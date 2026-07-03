@@ -70,16 +70,9 @@ resource "aws_eks_cluster" "main" {
 }
 
 
-data "tls_certificate" "eks" {
+data "aws_iam_openid_connect_provider" "eks" {
   count = var.deploy_eks ? 1 : 0
   url   = aws_eks_cluster.main[0].identity[0].oidc[0].issuer
-}
-
-resource "aws_iam_openid_connect_provider" "eks" {
-  count           = var.deploy_eks ? 1 : 0
-  client_id_list  = ["sts.amazonaws.com"]
-  thumbprint_list = [data.tls_certificate.eks[0].certificates[0].sha1_fingerprint]
-  url             = aws_eks_cluster.main[0].identity[0].oidc[0].issuer
 }
 
 # Default EKS Managed Node Group to run Karpenter, CoreDNS, and system workloads
@@ -161,17 +154,12 @@ resource "aws_eks_access_policy_association" "eks_admins" {
   depends_on = [aws_eks_access_entry.eks_admins]
 }
 
-# Default Kubernetes Workloads / Apps
-module "apps" {
-  source     = "./apps"
+# Default Kubernetes Workloads
+module "workloads" {
+  source     = "./workloads"
   count      = var.deploy_eks && var.deploy_apps ? 1 : 0
   depends_on = [helm_release.karpenter_defaults]
 
-  eks_cluster_name     = aws_eks_cluster.main[0].name
-  lbc_role_arn         = var.deploy_aws_lbc ? aws_iam_role.lbc[0].arn : ""
-  deploy_aws_lbc       = var.deploy_aws_lbc
-  deploy_nginx         = var.deploy_nginx
-  deploy_argocd        = var.deploy_argocd
-  deploy_argo_rollouts = var.deploy_argo_rollouts
-  deploy_argo_events   = var.deploy_argo_events
+  eks_cluster_name = aws_eks_cluster.main[0].name
+  eks_cluster_arn  = aws_eks_cluster.main[0].arn
 }
