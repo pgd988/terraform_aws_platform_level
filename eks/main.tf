@@ -70,16 +70,47 @@ resource "aws_eks_cluster" "main" {
 }
 
 
+data "tls_certificate" "eks" {
+  count = var.deploy_eks ? 1 : 0
+  url   = aws_eks_cluster.main[0].identity[0].oidc[0].issuer
+}
+
+resource "aws_iam_openid_connect_provider" "eks" {
+  count           = var.deploy_eks ? 1 : 0
+  client_id_list  = ["sts.amazonaws.com"]
+  thumbprint_list = [data.tls_certificate.eks[0].certificates[0].sha1_fingerprint]
+  url             = aws_eks_cluster.main[0].identity[0].oidc[0].issuer
+}
+
+# Default EKS Managed Node Group to run Karpenter, CoreDNS, and system workloads
+resource "aws_eks_node_group" "default" {
+  count           = var.deploy_eks ? 1 : 0
+  cluster_name    = aws_eks_cluster.main[0].name
+  node_group_name = "default-node-pool"
+  node_role_arn   = aws_iam_role.eks_node.arn
+  subnet_ids      = local.private_subnets
+
+  scaling_config {
+    desired_size = 2
+    max_size     = 4
+    min_size     = 1
+  }
+
+  instance_types = var.node_instance_types
+
+  depends_on = [
+    aws_iam_role_policy_attachment.eks_worker_node,
+    aws_iam_role_policy_attachment.eks_cni,
+    aws_iam_role_policy_attachment.eks_registry,
+  ]
+}
+
 resource "aws_eks_addon" "coredns" {
   count        = var.deploy_eks ? 1 : 0
   cluster_name = aws_eks_cluster.main[0].name
   addon_name   = "coredns"
 
-  configuration_values = jsonencode({
-    computeType = "Fargate"
-  })
-
-  depends_on = [aws_eks_fargate_profile.karpenter]
+  depends_on = [aws_eks_node_group.default]
 }
 
 resource "aws_eks_addon" "pod_identity" {
@@ -112,14 +143,14 @@ resource "aws_security_group_rule" "alb_to_eks" {
 
 # Grant EKS Admins IAM Role ClusterAdmin kubectl permissions
 resource "aws_eks_access_entry" "eks_admins" {
-  count         = var.deploy_eks ? 1 : 0
+  count         = var.deploy_eks && var.eks_admins_arn != "" ? 1 : 0
   cluster_name  = aws_eks_cluster.main[0].name
   principal_arn = var.eks_admins_arn
   type          = "STANDARD"
 }
 
 resource "aws_eks_access_policy_association" "eks_admins" {
-  count         = var.deploy_eks ? 1 : 0
+  count         = var.deploy_eks && var.eks_admins_arn != "" ? 1 : 0
   cluster_name  = aws_eks_cluster.main[0].name
   policy_arn    = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
   principal_arn = var.eks_admins_arn
@@ -136,6 +167,11 @@ module "apps" {
   count      = var.deploy_eks && var.deploy_apps ? 1 : 0
   depends_on = [helm_release.karpenter_defaults]
 
-  eks_cluster_name = aws_eks_cluster.main[0].name
-  lbc_role_arn     = aws_iam_role.lbc[0].arn
+  eks_cluster_name     = aws_eks_cluster.main[0].name
+  lbc_role_arn         = var.deploy_aws_lbc ? aws_iam_role.lbc[0].arn : ""
+  deploy_aws_lbc       = var.deploy_aws_lbc
+  deploy_nginx         = var.deploy_nginx
+  deploy_argocd        = var.deploy_argocd
+  deploy_argo_rollouts = var.deploy_argo_rollouts
+  deploy_argo_events   = var.deploy_argo_events
 }

@@ -22,7 +22,7 @@ variable "deploy_eks" {
 variable "deploy_apps" {
   description = "Toggle deployment of default Kubernetes workloads/apps (NGINX, Argo CD, AWS Load Balancer Controller, etc.)"
   type        = bool
-  default     = false
+  default     = true
 }
 
 variable "eks_cluster_name" {
@@ -33,7 +33,7 @@ variable "eks_cluster_name" {
 variable "node_instance_types" {
   description = "List of EC2 instance types for the default EKS managed node group"
   type        = list(string)
-  default     = ["t3.micro"]
+  default     = ["t3.small"]
 }
 
 variable "alb_sg_id" {

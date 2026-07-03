@@ -1,5 +1,6 @@
 # Kubernetes Service Account for AWS Load Balancer Controller
 resource "kubernetes_service_account" "lbc" {
+  count = var.deploy_aws_lbc ? 1 : 0
   metadata {
     name      = "aws-load-balancer-controller"
     namespace = "kube-system"
@@ -8,6 +9,7 @@ resource "kubernetes_service_account" "lbc" {
 
 # Link IAM Role to K8s Service Account via Pod Identity
 resource "aws_eks_pod_identity_association" "lbc" {
+  count           = var.deploy_aws_lbc ? 1 : 0
   cluster_name    = var.eks_cluster_name
   namespace       = "kube-system"
   service_account = "aws-load-balancer-controller"
@@ -18,6 +20,7 @@ resource "aws_eks_pod_identity_association" "lbc" {
 
 # Helm Release for AWS Load Balancer Controller
 resource "helm_release" "lbc" {
+  count      = var.deploy_aws_lbc ? 1 : 0
   name       = "aws-load-balancer-controller"
   repository = "https://aws.github.io/eks-charts"
   chart      = "aws-load-balancer-controller"

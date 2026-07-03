@@ -1,9 +1,11 @@
 data "aws_ssm_parameter" "default_tg_arn" {
-  name = "/platform/alb/default_tg_arn"
+  count = var.deploy_nginx ? 1 : 0
+  name  = "/platform/alb/default_tg_arn"
 }
 
 # Deploy NGINX default backend via Helm with TargetGroupBinding
 resource "helm_release" "default_nginx" {
+  count      = var.deploy_nginx ? 1 : 0
   name       = "default-nginx"
   repository = "https://charts.bitnami.com/bitnami"
   chart      = "nginx"
@@ -43,7 +45,7 @@ extraManifests:
       serviceRef:
         name: default-nginx
         port: 80
-      targetGroupARN: ${data.aws_ssm_parameter.default_tg_arn.value}
+      targetGroupARN: ${data.aws_ssm_parameter.default_tg_arn[0].value}
 EOF
   ]
 }
