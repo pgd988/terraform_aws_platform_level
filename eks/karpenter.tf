@@ -212,6 +212,10 @@ resource "helm_release" "karpenter_defaults" {
     name  = "region"
     value = var.aws_region
   }
+  set {
+    name  = "templates_hash"
+    value = sha1(join("", [for f in fileset("${path.module}/charts/karpenter-defaults/templates", "*.yaml") : filesha1("${path.module}/charts/karpenter-defaults/templates/${f}")]))
+  }
 
   depends_on = [helm_release.karpenter]
 }

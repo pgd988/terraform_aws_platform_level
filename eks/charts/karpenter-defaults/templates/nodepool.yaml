@@ -12,7 +12,7 @@ spec:
       requirements:
         - key: node.kubernetes.io/instance-type
           operator: In
-          values: ["t3.medium"]
+          values: ["t3.small"]
         - key: karpenter.sh/capacity-type
           operator: In
           values: ["on-demand", "spot"]

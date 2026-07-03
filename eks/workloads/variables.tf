@@ -29,7 +29,7 @@ variable "deploy_argocd" {
 variable "deploy_argo_rollouts" {
   description = "Toggle deployment of Argo Rollouts"
   type        = bool
-  default     = true
+  default     = false
 }
 
 variable "deploy_argo_events" {
