@@ -14,7 +14,7 @@ This repository contains Terraform configurations for deploying platform-level s
 - `load_balancer`: Application Load Balancer with self-signed SSL/TLS termination and direct pod IP target group routing.
 - `databases`: ElastiCache for Redis, conditional Amazon RDS PostgreSQL, and generic DynamoDB templates.
 - `monitoring`: CloudWatch dashboards and alarms.
-- `logging`: Centralized logging configurations.
+- `logging`: Centralized logging configurations, including a toggable feature (`exclude_log_groups = true`) that excludes high-volume log sources (such as `/aws/containerinsights/platform-cluster/performance` and `/aws/eks/platform-cluster/cluster`) from CloudWatch ingestion via IAM policy denial.
 - `iam`: Cluster-level IAM resources and shared policies — EKS cluster role (`eks-cluster-role`), `eks_admins` IAM group with assumable admin role (`eks-admin-role`), and the AWS Load Balancer Controller IAM policy. EC2 instance roles are managed in `compute`; the EKS node role is managed in `eks`.
 
 ## Architectural Highlights
