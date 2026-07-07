@@ -33,6 +33,12 @@ resource "aws_iam_role_policy_attachment" "eks_worker_minimal" {
   role       = aws_iam_role.eks_node.name
 }
 
+resource "aws_iam_role_policy_attachment" "eks_registry_pull_only" {
+  count      = var.enable_auto_mode ? 1 : 0
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryPullOnly"
+  role       = aws_iam_role.eks_node.name
+}
+
 resource "aws_kms_key" "eks" {
   count                   = var.deploy_eks ? 1 : 0
   description             = "EKS Secret Encryption Key"

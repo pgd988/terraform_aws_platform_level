@@ -42,6 +42,27 @@ resource "aws_iam_role_policy_attachment" "eks_cluster_auto_mode_networking" {
   role       = aws_iam_role.eks_cluster.name
 }
 
+resource "aws_iam_role_policy" "eks_cluster_auto_mode_instance_profiles" {
+  count = var.enable_auto_mode ? 1 : 0
+  name  = "EKSAutoModeInstanceProfiles"
+  role  = aws_iam_role.eks_cluster.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "iam:CreateInstanceProfile",
+          "iam:GetInstanceProfile",
+          "iam:DeleteInstanceProfile"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
+}
+
 
 
 
