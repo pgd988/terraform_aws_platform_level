@@ -43,8 +43,8 @@ jobs:
           skip-dirs: ".terraform,.git"
 
   # ──────────────────────────────────────────────
-  # Job 2a – Terraform plan (Wave 1: iam + load_balancer)
-  # Must run before eks, which depends on their outputs.
+  # Job 2a – Terraform plan (Wave 1: Platform Foundations)
+  # Runs in parallel; iam and load_balancer must complete before eks.
   # ──────────────────────────────────────────────
   terraform-plan-wave1:
     name: Terraform Plan – ${{ matrix.module }}
@@ -57,89 +57,6 @@ jobs:
         module:
           - iam
           - load_balancer
-
-    permissions:
-      contents: read
-      id-token: write
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Configure AWS credentials (OIDC)
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ env.AWS_DEPLOY_ROLE_ARN }}
-          aws-region: ${{ env.AWS_REGION }}
-          role-session-name: github-actions-tf-plan
-
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: ${{ env.TF_VERSION }}
-
-      - name: Terraform Init – ${{ matrix.module }}
-        working-directory: ${{ matrix.module }}
-        run: |
-          terraform init -input=false \
-            -backend-config="region=${{ env.AWS_REGION }}"
-
-      - name: Terraform Validate – ${{ matrix.module }}
-        working-directory: ${{ matrix.module }}
-        run: terraform validate
-
-      - name: Terraform Plan – ${{ matrix.module }}
-        id: tf-plan
-        working-directory: ${{ matrix.module }}
-        run: |
-          set -o pipefail
-          terraform plan \
-            -input=false \
-            -no-color \
-            -out=tfplan.binary 2>&1 | tee plan.txt
-          echo "exitcode=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
-
-      - name: Post plan summary to PR
-        if: github.event_name == 'pull_request'
-        uses: actions/github-script@v7
-        env:
-          MODULE: ${{ matrix.module }}
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          script: |
-            const fs = require('fs');
-            const plan = fs.readFileSync(`${process.env.MODULE}/plan.txt`, 'utf8');
-            const truncated = plan.length > 60000
-              ? plan.substring(0, 60000) + '\n\n... (truncated)'
-              : plan;
-            const body = `## Terraform Plan – \`${process.env.MODULE}\`\n\`\`\`\n${truncated}\n\`\`\``;
-            github.rest.issues.createComment({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body
-            });
-
-      - name: Upload plan artifact – ${{ matrix.module }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: tfplan-${{ matrix.module }}-${{ github.run_id }}
-          path: ${{ matrix.module }}/tfplan.binary
-          retention-days: 7
-
-  # ──────────────────────────────────────────────
-  # Job 2c – Terraform plan (Wave 3: remaining modules)
-  # Independent of other modules; run in parallel.
-  # ──────────────────────────────────────────────
-  terraform-plan-wave3:
-    name: Terraform Plan – ${{ matrix.module }}
-    runs-on: ubuntu-latest
-    needs: trivy-scan
-
-    strategy:
-      fail-fast: false
-      matrix:
-        module:
           - compute
           - databases
           - monitoring
@@ -214,10 +131,10 @@ jobs:
           retention-days: 7
 
   # ──────────────────────────────────────────────
-  # Job 2d – Terraform plan (Wave 4: logging)
+  # Job 2b – Terraform plan (Wave 3: logging)
   # Independent plan; apply will run after eks apply.
   # ──────────────────────────────────────────────
-  terraform-plan-wave4:
+  terraform-plan-wave3:
     name: Terraform Plan – ${{ matrix.module }}
     runs-on: ubuntu-latest
     needs: trivy-scan
@@ -298,8 +215,8 @@ jobs:
           retention-days: 7
 
   # ──────────────────────────────────────────────
-  # Job 3a – Terraform apply (Wave 1: iam + load_balancer)
-  # Runs first; eks depends on their SSM outputs.
+  # Job 3a – Terraform apply (Wave 1: Platform Foundations)
+  # Runs first; eks depends on iam and load_balancer SSM outputs.
   # ──────────────────────────────────────────────
   terraform-apply-wave1:
     name: Terraform Apply – ${{ matrix.module }}
@@ -313,6 +230,9 @@ jobs:
         module:
           - iam
           - load_balancer
+          - compute
+          - databases
+          - monitoring
 
     environment: production
 
@@ -361,9 +281,7 @@ jobs:
   terraform-plan-eks-resolved:
     name: Terraform Plan – eks (Resolved Vars)
     runs-on: ubuntu-latest
-    needs: 
-      - terraform-apply-wave1
-      - terraform-apply-wave3
+    needs: terraform-apply-wave1
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
 
     permissions:
@@ -478,80 +396,28 @@ jobs:
         run: terraform apply -input=false -auto-approve tfplan.binary
 
   # ──────────────────────────────────────────────
-  # Job 3d – Terraform apply (Wave 3: remaining modules)
-  # Independent; run in parallel after plan passes.
+  # Job 3c – Terraform apply (Wave 3: logging)
+  # Runs after eks apply so that eks-node-role and eks-cluster-role exist.
+  # Runs regardless of eks apply outcome as long as logging plan succeeded.
+  # No environment: production specified to avoid requiring an extra approval.
   # ──────────────────────────────────────────────
   terraform-apply-wave3:
     name: Terraform Apply – ${{ matrix.module }}
     runs-on: ubuntu-latest
-    needs: terraform-plan-wave3
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-
-    strategy:
-      fail-fast: false
-      matrix:
-        module:
-          - compute
-          - databases
-          - monitoring
-
-    environment: production
-
-    permissions:
-      contents: read
-      id-token: write
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Configure AWS credentials (OIDC)
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ env.AWS_DEPLOY_ROLE_ARN }}
-          aws-region: ${{ env.AWS_REGION }}
-          role-session-name: github-actions-tf-apply
-
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: ${{ env.TF_VERSION }}
-
-      - name: Terraform Init – ${{ matrix.module }}
-        working-directory: ${{ matrix.module }}
-        run: |
-          terraform init -input=false \
-            -backend-config="region=${{ env.AWS_REGION }}"
-
-      - name: Download plan artifact – ${{ matrix.module }}
-        uses: actions/download-artifact@v4
-        with:
-          name: tfplan-${{ matrix.module }}-${{ github.run_id }}
-          path: ${{ matrix.module }}
-
-      - name: Terraform Apply – ${{ matrix.module }}
-        working-directory: ${{ matrix.module }}
-        run: terraform apply -input=false -auto-approve tfplan.binary
-
-  # ──────────────────────────────────────────────
-  # Job 3e – Terraform apply (Wave 4: logging)
-  # Runs after eks apply so that eks-node-role and eks-cluster-role exist.
-  # ──────────────────────────────────────────────
-  terraform-apply-wave4:
-    name: Terraform Apply – ${{ matrix.module }}
-    runs-on: ubuntu-latest
     needs:
-      - terraform-plan-wave4
+      - terraform-plan-wave3
       - terraform-apply-eks
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: |
+      always() &&
+      needs.terraform-plan-wave3.result == 'success' &&
+      github.event_name == 'push' &&
+      github.ref == 'refs/heads/main'
 
     strategy:
       fail-fast: false
       matrix:
         module:
           - logging
-
-    environment: production
 
     permissions:
       contents: read
