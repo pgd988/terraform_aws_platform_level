@@ -41,10 +41,11 @@ resource "aws_kms_key" "eks" {
 }
 
 resource "aws_eks_cluster" "main" {
-  count                     = var.deploy_eks ? 1 : 0
-  name                      = var.eks_cluster_name
-  role_arn                  = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/eks-cluster-role"
-  enabled_cluster_log_types = ["api", "audit", "authenticator", "controllerManager", "scheduler"]
+  count                         = var.deploy_eks ? 1 : 0
+  name                          = var.eks_cluster_name
+  role_arn                      = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/eks-cluster-role"
+  enabled_cluster_log_types     = ["api", "audit", "authenticator", "controllerManager", "scheduler"]
+  bootstrap_self_managed_addons = !var.enable_auto_mode
 
   access_config {
     authentication_mode                         = "API_AND_CONFIG_MAP"
