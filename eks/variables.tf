@@ -63,8 +63,9 @@ variable "deletion_protection" {
 variable "enable_auto_mode" {
   description = "Enable Amazon EKS Auto Mode (managed Karpenter, LBC, CoreDNS, EBS CSI, and Bottlerocket OS)"
   type        = bool
-  default     = false
+  default     = true
 }
+
 
 variable "auto_mode_node_pools" {
   description = "List of node pools to enable in EKS Auto Mode compute configuration"
