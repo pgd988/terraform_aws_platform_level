@@ -203,4 +203,9 @@ module "workloads" {
   eks_cluster_name = aws_eks_cluster.main[0].name
   eks_cluster_arn  = aws_eks_cluster.main[0].arn
   enable_auto_mode = var.enable_auto_mode
+
+  argocd_github_repo_url            = var.argocd_github_repo_url
+  argocd_github_app_id              = var.argocd_github_app_id
+  argocd_github_app_installation_id = var.argocd_github_app_installation_id
+  argocd_github_secret_name         = var.argocd_github_secret_name
 }
