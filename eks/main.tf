@@ -27,6 +27,11 @@ resource "aws_iam_role_policy_attachment" "eks_ssm" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
   role       = aws_iam_role.eks_node.name
 }
+resource "aws_iam_role_policy_attachment" "eks_worker_minimal" {
+  count      = var.enable_auto_mode ? 1 : 0
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEKSWorkerNodeMinimalPolicy"
+  role       = aws_iam_role.eks_node.name
+}
 
 resource "aws_kms_key" "eks" {
   count                   = var.deploy_eks ? 1 : 0
@@ -60,6 +65,33 @@ resource "aws_eks_cluster" "main" {
     public_access_cidrs     = var.admin_allowed_cidrs
   }
 
+  dynamic "compute_config" {
+    for_each = var.enable_auto_mode ? [1] : []
+    content {
+      enabled       = true
+      node_pools    = var.auto_mode_node_pools
+      node_role_arn = aws_iam_role.eks_node.arn
+    }
+  }
+
+  dynamic "storage_config" {
+    for_each = var.enable_auto_mode ? [1] : []
+    content {
+      block_storage {
+        enabled = true
+      }
+    }
+  }
+
+  dynamic "kubernetes_network_config" {
+    for_each = var.enable_auto_mode ? [1] : []
+    content {
+      elastic_load_balancing {
+        enabled = true
+      }
+    }
+  }
+
   lifecycle {
     # prevent_destroy is intentionally not set here; controlled by the
     # deletion_protection variable at the API level (e.g. node group scaling).
@@ -77,7 +109,7 @@ data "aws_iam_openid_connect_provider" "eks" {
 
 # Default EKS Managed Node Group to run Karpenter, CoreDNS, and system workloads
 resource "aws_eks_node_group" "default" {
-  count           = var.deploy_eks ? 1 : 0
+  count           = var.deploy_eks && !var.enable_auto_mode ? 1 : 0
   cluster_name    = aws_eks_cluster.main[0].name
   node_group_name = "default-node-pool"
   node_role_arn   = aws_iam_role.eks_node.arn
@@ -99,7 +131,7 @@ resource "aws_eks_node_group" "default" {
 }
 
 resource "aws_eks_addon" "coredns" {
-  count        = var.deploy_eks ? 1 : 0
+  count        = var.deploy_eks && !var.enable_auto_mode ? 1 : 0
   cluster_name = aws_eks_cluster.main[0].name
   addon_name   = "coredns"
 
@@ -162,4 +194,5 @@ module "workloads" {
 
   eks_cluster_name = aws_eks_cluster.main[0].name
   eks_cluster_arn  = aws_eks_cluster.main[0].arn
+  enable_auto_mode = var.enable_auto_mode
 }

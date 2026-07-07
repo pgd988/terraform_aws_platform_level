@@ -9,3 +9,10 @@ variable "deletion_protection" {
   type        = bool
   default     = false
 }
+
+variable "enable_auto_mode" {
+  description = "Enable Amazon EKS Auto Mode IAM policy attachments for the cluster role"
+  type        = bool
+  default     = false
+}
+

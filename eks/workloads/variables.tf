@@ -14,6 +14,13 @@ variable "deploy_aws_lbc" {
   default     = false
 }
 
+variable "enable_auto_mode" {
+  description = "Enable Amazon EKS Auto Mode (bypasses self-managed AWS Load Balancer Controller)"
+  type        = bool
+  default     = false
+}
+
+
 variable "deploy_nginx" {
   description = "Toggle deployment of NGINX default backend"
   type        = bool

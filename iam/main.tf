@@ -18,6 +18,31 @@ resource "aws_iam_role_policy_attachment" "eks_cluster_policy" {
   role       = aws_iam_role.eks_cluster.name
 }
 
+resource "aws_iam_role_policy_attachment" "eks_cluster_auto_mode_compute" {
+  count      = var.enable_auto_mode ? 1 : 0
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEKSComputePolicy"
+  role       = aws_iam_role.eks_cluster.name
+}
+
+resource "aws_iam_role_policy_attachment" "eks_cluster_auto_mode_storage" {
+  count      = var.enable_auto_mode ? 1 : 0
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEKSBlockStoragePolicy"
+  role       = aws_iam_role.eks_cluster.name
+}
+
+resource "aws_iam_role_policy_attachment" "eks_cluster_auto_mode_lb" {
+  count      = var.enable_auto_mode ? 1 : 0
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEKSLoadBalancingPolicy"
+  role       = aws_iam_role.eks_cluster.name
+}
+
+resource "aws_iam_role_policy_attachment" "eks_cluster_auto_mode_networking" {
+  count      = var.enable_auto_mode ? 1 : 0
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEKSNetworkingPolicy"
+  role       = aws_iam_role.eks_cluster.name
+}
+
+
 
 
 # IAM Group for EKS Administrators

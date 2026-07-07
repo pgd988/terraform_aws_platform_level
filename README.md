@@ -91,22 +91,56 @@ resource "aws_eks_cluster" "main" {
 
 This code change should be committed as part of a dedicated production promotion branch and code review.
 
-### 5. Static External IP Bridge (NLB Chaining to ALB)
+### 5. Optional EKS Cluster Deployment in Auto Mode
+The platform supports deploying the EKS cluster in **Amazon EKS Auto Mode** via a simple variable toggle (`enable_auto_mode = true`). In Auto Mode, AWS automatically manages the provisioning, scaling, patching, and lifecycle of compute (Karpenter), block storage (EBS CSI), networking (VPC CNI, CoreDNS), and load balancing (AWS Load Balancer Controller).
+- **Automatic Override & Deconfliction**: When `enable_auto_mode = true` is set, the Terraform codebase automatically disables self-managed Karpenter Helm releases, the default managed node group, the CoreDNS add-on, and the self-managed AWS Load Balancer Controller to prevent controller overlap and drift.
+- **IAM Hardening**: The `iam` module conditionally attaches the four required AWS-managed policies (`AmazonEKSComputePolicy`, `AmazonEKSBlockStoragePolicy`, `AmazonEKSLoadBalancingPolicy`, `AmazonEKSNetworkingPolicy`) to `eks-cluster-role`, while the `eks` module attaches `AmazonEKSWorkerNodeMinimalPolicy` to `eks-node-role`.
+- **Operating System**: Worker nodes in Auto Mode exclusively use Bottlerocket OS and are fully managed by AWS without direct SSH/SSM access.
+
+#### How to Enable EKS Auto Mode
+To deploy or transition your cluster to EKS Auto Mode, enable the feature across both the `iam` and `eks` modules:
+
+**Option 1: Using `terraform.tfvars` (Recommended)**
+Add the variable to your shared `terraform.tfvars` (or environment variable file):
+```hcl
+enable_auto_mode = true
+
+# Optional: Customize active Auto Mode node pools (defaults to general-purpose and system)
+auto_mode_node_pools = ["general-purpose", "system"]
+```
+Then apply the IAM and EKS modules in sequence:
+```bash
+# 1. Apply IAM module first to attach required Auto Mode policies to eks-cluster-role
+terraform -chdir=iam apply
+
+# 2. Apply EKS module to enable Auto Mode compute/storage/routing and bypass self-managed controllers
+terraform -chdir=eks apply
+```
+
+**Option 2: Using CLI Variable Flags**
+Pass `-var="enable_auto_mode=true"` directly during plan and apply:
+```bash
+terraform -chdir=iam apply -var="enable_auto_mode=true"
+terraform -chdir=eks apply -var="enable_auto_mode=true"
+```
+
+
+### 6. Static External IP Bridge (NLB Chaining to ALB)
 Because AWS Application Load Balancers scale IP addresses dynamically and cannot attach static Elastic IPs directly, the `load_balancer` module implements an HCL **NLB Chaining Bridge** (`deploy_alb = true`).
 
 A public Network Load Balancer (NLB) is provisioned with dedicated Elastic IPs (`aws_eip.nlb`) mapped across public subnets. The NLB uses `target_type = "alb"` target groups to forward TCP ports 80 and 443 directly into the Application Load Balancer. This gives external DNS providers (e.g., Cloudflare) fixed, immutable entrypoint IP addresses while preserving full ALB Layer 7 path routing and SSL termination.
 
-### 6. Cloudflare Reverse Proxy Ingress Hardening
+### 7. Cloudflare Reverse Proxy Ingress Hardening
 To prevent unauthorized origin IP scanning and bypass attacks, the public NLB entrypoint is bound to a hardened VPC Security Group (`aws_security_group.nlb_cloudflare`).
 
 The security group decodes `load_balancer/policies/cloudflare_nlb_policy.json` during execution and restricts all inbound TCP traffic (ports 80 and 443) strictly to Cloudflare's published Reverse Proxy IPv4 CIDR ranges (AS13335). This ensures that only traffic originating from Cloudflare edge nodes can reach your load balancing stack.
 
-### 7. Tiered Network Separation Topology
+### 8. Tiered Network Separation Topology
 To enforce strict defense-in-depth across the platform, infrastructure resources are isolated across public and private subnet tiers:
 - **Public Tier (Ingress & Admin Core)**: Hosts the Cloudflare-hardened Network Load Balancer (`aws_lb.nlb`) alongside external GitLab and Monitoring EC2 VMs.
 - **Private Tier (Workloads & Data Core)**: Hosts the internal Application Load Balancer (`internal = true`), Amazon EKS cluster & worker nodes, all databases (RDS PostgreSQL, ElastiCache Redis, DynamoDB), and internal services (RabbitMQ, MongoDB VMs). EKS workloads communicate with databases directly within the private network tier without internet exposure.
 
-### 8. Zero-Trust Security Group Chaining (Locking Mechanism)
+### 9. Zero-Trust Security Group Chaining (Locking Mechanism)
 Because all resources downstream of the NLB reside in private network tiers, strict zero-trust boundaries are enforced via inline Security Group chaining:
 - **NLB Security Group (`nlb_cloudflare`)**: Allows ingress on TCP ports 80/443 strictly from Cloudflare's published Reverse Proxy IP ranges.
 - **ALB Security Group (`alb_locked`)**: Allows ingress on TCP ports 80/443 strictly from the NLB Security Group (`aws_security_group.nlb_cloudflare`). Exported via SSM (`/platform/alb/security_group_id`).
@@ -114,7 +148,7 @@ Because all resources downstream of the NLB reside in private network tiers, str
 
 By chaining boundaries this way, your Kubernetes pods have zero path to be reached directly from the internet, the internal Application Load Balancer is shielded from direct IP scanning, and only validated requests processed through Cloudflare can ever hit application code.
 
-### 9. DevOps Local `kubectl` Reachability & Assumable `eks-admin-role` Bridge
+### 10. DevOps Local `kubectl` Reachability & Assumable `eks-admin-role` Bridge
 While worker nodes and application workloads run strictly within isolated private subnets, the EKS Kubernetes control plane is configured for seamless remote administration:
 - **API Endpoint Accessibility**: Enabled dual endpoint reachability (`endpoint_private_access = true`, `endpoint_public_access = true`), allowing DevOps engineers to reach the cluster API securely from local workstations or office VPNs. Source IP whitelisting can be enforced via `var.admin_allowed_cidrs`.
 - **Assumable Admin Role Bridge (`eks_admins`)**: Because AWS EKS Access Entries (`aws_eks_access_entry`) only evaluate identity ARNs directly present in STS tokens (`user/*` or `role/*`) and ignore IAM Groups (`group/*`), the architecture uses an assumable role pattern:
@@ -123,7 +157,8 @@ While worker nodes and application workloads run strictly within isolated privat
   3. The `eks` module binds `eks-admin-role` directly to `AmazonEKSClusterAdminPolicy` via EKS Access Entries (`API_AND_CONFIG_MAP`).
   4. Developers in the `eks_admins` group configure their kubeconfig with `--role-arn arn:aws:iam::<account-id>:role/eks-admin-role` to transparently authenticate as `ClusterAdmin`.
 
-### 10. IAM Ownership Split by Concern
+### 11. IAM Ownership Split by Concern
+
 To keep IAM resources co-located with the infrastructure that consumes them, roles and profiles are split across three modules:
 
 | Module | IAM Resources Owned |
