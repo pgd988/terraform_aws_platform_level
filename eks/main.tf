@@ -103,9 +103,10 @@ resource "aws_eks_cluster" "main" {
 
 
 data "aws_iam_openid_connect_provider" "eks" {
-  count = var.deploy_eks ? 1 : 0
+  count = var.deploy_eks && !var.enable_auto_mode ? 1 : 0
   url   = aws_eks_cluster.main[0].identity[0].oidc[0].issuer
 }
+
 
 # Default EKS Managed Node Group to run Karpenter, CoreDNS, and system workloads
 resource "aws_eks_node_group" "default" {
