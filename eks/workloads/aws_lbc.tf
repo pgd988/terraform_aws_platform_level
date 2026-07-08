@@ -27,23 +27,7 @@ data "aws_iam_policy_document" "lbc_pod_identity_trust" {
       values   = [data.aws_caller_identity.current.account_id]
     }
 
-    condition {
-      test     = "ArnEquals"
-      variable = "aws:SourceArn"
-      values   = [var.eks_cluster_arn]
-    }
 
-    condition {
-      test     = "StringEquals"
-      variable = "aws:RequestTag/eks-pod-identity-agent:namespace"
-      values   = ["kube-system"]
-    }
-
-    condition {
-      test     = "StringEquals"
-      variable = "aws:RequestTag/eks-pod-identity-agent:service-account"
-      values   = ["aws-load-balancer-controller"]
-    }
   }
 }
 

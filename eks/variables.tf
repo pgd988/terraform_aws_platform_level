@@ -76,19 +76,19 @@ variable "auto_mode_node_pools" {
 variable "argocd_github_repo_url" {
   description = "GitHub repository URL for Argo CD"
   type        = string
-  default     = "https://github.com/your-org/your-repo"
+  default     = "https://github.com/pgd988/argocd_test_repo.git"
 }
 
 variable "argocd_github_app_id" {
   description = "GitHub App ID for Argo CD repo authentication"
   type        = string
-  default     = ""
+  default     = "4238467"
 }
 
 variable "argocd_github_app_installation_id" {
   description = "GitHub App Installation ID for Argo CD repo authentication"
   type        = string
-  default     = ""
+  default     = "145000316"
 }
 
 variable "argocd_github_secret_name" {

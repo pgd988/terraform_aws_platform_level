@@ -24,23 +24,7 @@ data "aws_iam_policy_document" "external_secrets_pod_identity_trust" {
       values   = [data.aws_caller_identity.current.account_id]
     }
 
-    condition {
-      test     = "ArnEquals"
-      variable = "aws:SourceArn"
-      values   = [var.eks_cluster_arn]
-    }
 
-    condition {
-      test     = "StringEquals"
-      variable = "aws:RequestTag/eks-pod-identity-agent:namespace"
-      values   = ["external-secrets"]
-    }
-
-    condition {
-      test     = "StringEquals"
-      variable = "aws:RequestTag/eks-pod-identity-agent:service-account"
-      values   = ["external-secrets"]
-    }
   }
 }
 
@@ -103,7 +87,7 @@ resource "helm_release" "external_secrets" {
   namespace        = kubernetes_namespace.external_secrets[0].metadata[0].name
   create_namespace = false
   version          = "0.10.5"
-  wait             = false
+  wait             = true
 
   values = [
     <<EOF
@@ -132,6 +116,10 @@ resource "helm_release" "external_secrets_defaults" {
     value = data.aws_region.current.name
   }
   set {
+    name  = "argocd.deployed"
+    value = var.deploy_argocd
+  }
+  set {
     name  = "argocd.enabled"
     value = var.deploy_argocd && var.argocd_github_app_id != ""
   }
@@ -156,5 +144,8 @@ resource "helm_release" "external_secrets_defaults" {
     value = sha1(join("", [for f in fileset("${path.module}/charts/external-secrets-defaults/templates", "*.yaml") : filesha1("${path.module}/charts/external-secrets-defaults/templates/${f}")]))
   }
 
-  depends_on = [helm_release.external_secrets]
+  depends_on = [
+    helm_release.external_secrets,
+    helm_release.argocd
+  ]
 }

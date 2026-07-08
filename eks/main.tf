@@ -198,7 +198,10 @@ resource "aws_eks_access_policy_association" "eks_admins" {
 module "workloads" {
   source     = "./workloads"
   count      = var.deploy_eks && var.deploy_apps ? 1 : 0
-  depends_on = [helm_release.karpenter_defaults]
+  depends_on = [
+    helm_release.karpenter_defaults,
+    aws_eks_addon.pod_identity
+  ]
 
   eks_cluster_name = aws_eks_cluster.main[0].name
   eks_cluster_arn  = aws_eks_cluster.main[0].arn
