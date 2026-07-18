@@ -1,0 +1,151 @@
+# ==============================================================================
+# EKS Auto Mode — Custom NodePool
+# ==============================================================================
+#
+# WHAT THIS IS:
+#   A Karpenter NodePool (karpenter.sh/v1) that Auto Mode exposes for you to
+#   define custom node pools beyond the built-in "general-purpose" and "system"
+#   pools. This example creates a dedicated pool for a specific workload tier.
+#
+# NODE ISOLATION STRATEGY:
+#   This pool uses a taint (NoSchedule) to prevent pods without an explicit
+#   toleration from landing on these nodes. This achieves soft node isolation:
+#
+#     Pods WITHOUT the toleration  → scheduled on general-purpose pool
+#     Pods WITH the toleration     → eligible for THIS pool only
+#
+#   Combined with a matching nodeSelector/nodeAffinity on your Deployment,
+#   this guarantees dedicated nodes for your workload tier.
+#
+# TARGETING PODS (add to your Deployment spec):
+#
+#   spec:
+#     tolerations:
+#       - key: workload-tier
+#         value: dedicated-example
+#         effect: NoSchedule
+#     nodeSelector:
+#       workload-tier: dedicated-example
+#
+#   Or with nodeAffinity for more control:
+#
+#   spec:
+#     affinity:
+#       nodeAffinity:
+#         requiredDuringSchedulingIgnoredDuringExecution:
+#           nodeSelectorTerms:
+#             - matchExpressions:
+#                 - key: workload-tier
+#                   operator: In
+#                   values: [dedicated-example]
+#
+# SCALING TO ZERO:
+#   When no pods with the matching toleration are scheduled, Karpenter will
+#   terminate all nodes in this pool (subject to consolidationPolicy and
+#   consolidateAfter). This means you only pay for nodes when workloads
+#   actually need them.
+#
+# MULTI-POOL PATTERN:
+#   Create one NodeClass + NodePool pair per workload tier. Use distinct
+#   taint keys/values per tier to ensure clean separation. Example tiers:
+#     - payment-processing  (on-demand, m6i, strict NoSchedule)
+#     - ml-inference        (spot, g5, NoSchedule)
+#     - batch-jobs          (spot, c6i, PreferNoSchedule)
+#     - default             (built-in general-purpose pool, no taint)
+#
+# ARGOCD:
+#   Deploy via a dedicated Argo CD Application per tier. Example app:
+#
+#   apiVersion: argoproj.io/v1alpha1
+#   kind: Application
+#   metadata:
+#     name: node-pool-dedicated-example
+#     namespace: argocd
+#   spec:
+#     project: default
+#     source:
+#       repoURL: https://github.com/your-org/terraform_aws_platform_level.git
+#       targetRevision: HEAD
+#       path: examples/node-pools
+#     destination:
+#       server: https://kubernetes.default.svc
+#       namespace: default    # NodeClass and NodePool are cluster-scoped
+#     syncPolicy:
+#       automated:
+#         prune: true
+#         selfHeal: true
+#
+# REFERENCES:
+#   NodePool API:   https://karpenter.sh/docs/concepts/nodepools/
+#   Auto Mode docs: https://docs.aws.amazon.com/eks/latest/userguide/auto-node-pools.html
+# ==============================================================================
+
+apiVersion: karpenter.sh/v1
+kind: NodePool
+metadata:
+  name: dedicated-example
+spec:
+  # ── Node Template ────────────────────────────────────────────────────────────
+  template:
+    metadata:
+      # Labels propagated to every node provisioned by this pool.
+      # Use these in nodeSelector / nodeAffinity on your pods.
+      labels:
+        workload-tier: dedicated-example
+
+    spec:
+      # Hard taint — only pods with a matching toleration will be scheduled here.
+      # Change effect to PreferNoSchedule for a soft preference instead.
+      taints:
+        - key: workload-tier
+          value: dedicated-example
+          effect: NoSchedule
+
+      # Reference to the NodeClass defined in nodeclass.yaml.
+      nodeClassRef:
+        group: eks.amazonaws.com
+        kind: NodeClass
+        name: dedicated-workload   # must match metadata.name in nodeclass.yaml
+
+      # Node requirements — constrain what EC2 instances Karpenter may provision.
+      requirements:
+        # Capacity type: on-demand for predictability, spot for cost savings.
+        # Use on-demand for latency-sensitive or stateful workloads.
+        - key: karpenter.sh/capacity-type
+          operator: In
+          values: ["on-demand"]
+
+        # Instance families: pick instance types that match your workload profile.
+        # m6i / m7i → balanced compute/memory (general application servers)
+        # c6i / c7i → compute-optimised (CPU-heavy batch or API workloads)
+        # r6i / r7i → memory-optimised (caches, analytics)
+        - key: node.kubernetes.io/instance-type
+          operator: In
+          values:
+            - m6i.large
+            - m6i.xlarge
+            - m6i.2xlarge
+            - m7i.large
+            - m7i.xlarge
+            - m7i.2xlarge
+
+        # Availability zones: spread across all AZs for resilience.
+        # To pin to a specific AZ (e.g. for EBS volumes), set operator: In
+        # and values: ["eu-central-1a"]
+        - key: topology.kubernetes.io/zone
+          operator: Exists
+
+  # ── Pool Limits ──────────────────────────────────────────────────────────────
+  # Hard ceiling on total resources this pool may consume.
+  # Adjust per workload tier. Prevents runaway scaling.
+  limits:
+    cpu: "64"       # 64 vCPUs max across all nodes in this pool
+    memory: "256Gi" # 256 GiB RAM max
+
+  # ── Consolidation ────────────────────────────────────────────────────────────
+  disruption:
+    # WhenEmptyOrUnderutilized: consolidate nodes that are empty or whose
+    # workloads can be packed onto fewer nodes.
+    # WhenEmpty: only terminate completely empty nodes (more conservative).
+    consolidationPolicy: WhenEmptyOrUnderutilized
+    consolidateAfter: 30s  # wait 30s of sustained under-utilisation before acting

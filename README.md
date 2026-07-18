@@ -5,17 +5,19 @@ This repository contains Terraform configurations for deploying platform-level s
 ## Directory Structure
 
 - `compute`: EC2 instance configurations (GitLab, RabbitMQ, MongoDB, Monitoring), including per-service IAM roles and EC2 instance profiles (`instance_profiles.tf`).
-- `eks`: Amazon EKS cluster, node groups, add-ons (Pod Identity Agent, CloudWatch Observability), and foundational tooling:
-  - **EKS Node IAM Role**: `aws_iam_role.eks_node` and its five managed policy attachments (WorkerNode, CNI, ECR, CloudWatchAgentServerPolicy, AmazonSSMManagedInstanceCore) are declared here.
-  - **Karpenter Node Autoscaler (Base Configuration)**: Replaces static managed node pools. Deploys the Karpenter controller on a dedicated EKS Fargate Profile (`karpenter` namespace via EKS Pod Identity) along with a default `EC2NodeClass` and `general` `NodePool` configured for `t3.micro` spot/on-demand instances (`limits: cpu 2000, memory 4000Gi`).
+- `eks`: Amazon EKS cluster, managed add-ons (Pod Identity Agent, CloudWatch Observability, ADOT, cert-manager, Private CA Connector), and foundational tooling:
+  - **EKS Auto Mode**: AWS automatically manages node provisioning, scaling, patching, and lifecycle using its built-in compute engine. No self-managed Karpenter, node groups, or CoreDNS add-on required.
   - **Node Monitoring**: Uses the `amazon-cloudwatch-observability` EKS managed add-on to deploy the CloudWatch Agent DaemonSet and Fluent Bit telemetry collectors across worker nodes.
-  - `apps/`: All Kubernetes workloads deployed via Helm (default NGINX sink returning 403, Argo CD, Argo Rollouts, Argo Events, and AWS Load Balancer Controller k8s resources). Controlled by the `deploy_apps` feature toggle (`false` by default) to prevent connection errors during initial cluster bootstrap.
-  - `policies/`: Self-hosted JSON IAM policies for EKS add-ons.
+  - **Private CA & ADOT Observability (`private_ca.tf`)**: Provisions a full AWS Private CA stack (`ACM Private CA`), AWS-managed `cert-manager` add-on, `aws-privateca-connector-for-kubernetes` add-on, and `AWSPCAClusterIssuer` CR for ADOT operator webhook certificates.
+  - `workloads/`: All Kubernetes workloads deployed via Helm (default NGINX sink returning 403, Argo CD, Argo Rollouts, Argo Events, and AWS Load Balancer Controller k8s resources). Controlled by the `deploy_apps` feature toggle (`false` by default) to prevent connection errors during initial cluster bootstrap.
+- `examples`: Reference YAML deployment examples:
+  - `adot/`: Ready-to-deploy `adot-collector.yaml` (`OpenTelemetryCollector` CR with AWS X-Ray exporter) and `sample-app-deployment.yaml` (OTel SDK environment variables for X-Ray tracing without pod-level AWS IAM credentials).
+  - `node-pools/`: EKS Auto Mode custom node pool examples (`nodeclass.yaml` + `nodepool.yaml`). Deploy via a dedicated Argo CD Application to create isolated node pools with taints/labels for workload-tier separation. See inline comments for pod targeting syntax and multi-pool patterns.
 - `load_balancer`: Application Load Balancer with self-signed SSL/TLS termination and direct pod IP target group routing.
 - `databases`: ElastiCache for Redis, conditional Amazon RDS PostgreSQL, and generic DynamoDB templates.
 - `monitoring`: CloudWatch dashboards and alarms.
 - `logging`: Centralized logging configurations, including a toggable feature (`exclude_log_groups = true`) that excludes high-volume log sources (such as `/aws/containerinsights/platform-cluster/performance` and `/aws/eks/platform-cluster/cluster`) from CloudWatch ingestion via IAM policy denial.
-- `iam`: Cluster-level IAM resources and shared policies — EKS cluster role (`eks-cluster-role`), `eks_admins` IAM group with assumable admin role (`eks-admin-role`), and the AWS Load Balancer Controller IAM policy. EC2 instance roles are managed in `compute`; the EKS node role is managed in `eks`.
+- `iam`: Cluster-level IAM resources split into `iam/eks/` — EKS cluster role (`eks-cluster-role`), EKS node role (`eks-node-role`), `eks_admins` IAM group with assumable admin role (`eks-admin-role`), and per-workload Pod Identity roles (ADOT, External Secrets, Argo CD, LBC, Private CA Connector). EC2 instance roles are managed in `compute`.
 
 ## Architectural Highlights
 
@@ -91,10 +93,10 @@ resource "aws_eks_cluster" "main" {
 
 This code change should be committed as part of a dedicated production promotion branch and code review.
 
-### 5. Optional EKS Cluster Deployment in Auto Mode
-The platform supports deploying the EKS cluster in **Amazon EKS Auto Mode** via a simple variable toggle (`enable_auto_mode = true`). In Auto Mode, AWS automatically manages the provisioning, scaling, patching, and lifecycle of compute (Karpenter), block storage (EBS CSI), networking (VPC CNI, CoreDNS), and load balancing (AWS Load Balancer Controller).
-- **Automatic Override & Deconfliction**: When `enable_auto_mode = true` is set, the Terraform codebase automatically disables self-managed Karpenter Helm releases, the default managed node group, the CoreDNS add-on, and the self-managed AWS Load Balancer Controller to prevent controller overlap and drift.
-- **IAM Hardening**: The `iam` module conditionally attaches the four required AWS-managed policies (`AmazonEKSComputePolicy`, `AmazonEKSBlockStoragePolicy`, `AmazonEKSLoadBalancingPolicy`, `AmazonEKSNetworkingPolicy`) to `eks-cluster-role`, while the `eks` module attaches `AmazonEKSWorkerNodeMinimalPolicy` to `eks-node-role`.
+### 5. EKS Auto Mode (Primary Deployment Model)
+This platform deploys EKS in **Amazon EKS Auto Mode** (`enable_auto_mode = true` by default). In Auto Mode, AWS internally runs Karpenter as a managed service, automatically handling node provisioning, scaling, patching, block storage (EBS CSI), networking (VPC CNI, CoreDNS), and load balancing — without any self-managed controllers in the cluster.
+- **No self-managed Karpenter**: Karpenter is handled by AWS. There are no `helm_release` or IAM role resources for Karpenter in this codebase.
+- **IAM Hardening**: The `iam/eks` module conditionally attaches the four required AWS-managed policies (`AmazonEKSComputePolicy`, `AmazonEKSBlockStoragePolicy`, `AmazonEKSLoadBalancingPolicy`, `AmazonEKSNetworkingPolicy`) to `eks-cluster-role`, and `AmazonEKSWorkerNodeMinimalPolicy` + `AmazonEC2ContainerRegistryPullOnly` to `eks-node-role` when Auto Mode is active.
 - **Operating System**: Worker nodes in Auto Mode exclusively use Bottlerocket OS and are fully managed by AWS without direct SSH/SSM access.
 
 #### How to Enable EKS Auto Mode
@@ -169,6 +171,14 @@ To keep IAM resources co-located with the infrastructure that consumes them, rol
 
 This avoids cross-module dependencies and ensures each module is self-contained: the `eks` module declares and consumes the node role directly (`aws_iam_role.eks_node.arn`), and the `compute` module manages the full lifecycle of its EC2 instance profiles.
 
+### 12. Full AWS Private CA PKI & ADOT Observability Stack
+The platform implements a cloud-native, AWS-signed PKI and distributed tracing pipeline using **AWS Distro for OpenTelemetry (ADOT)** and **AWS Private CA**:
+- **AWS Managed `cert-manager` & Private CA Connector (`eks/private_ca.tf`)**: Instead of relying on self-signed cluster CAs or third-party Helm charts, the cluster runs the official EKS `cert-manager` add-on paired with the `aws-privateca-connector-for-kubernetes` add-on. A dedicated Root `aws_acmpca_certificate_authority` is provisioned and linked via an `AWSPCAClusterIssuer` (`aws-privateca-issuer`), ensuring all internal admission webhooks (`opentelemetry-operator-system`) and cluster certificates are issued directly by AWS Private CA.
+- **Two-Tier Tracing Architecture Without App Credentials**: Application pods do **not** require direct AWS IAM permissions or `xray:PutTraceSegments` credentials. Applications instrumented with the OpenTelemetry SDK export standard OTLP over internal Kubernetes DNS to the ADOT Collector (`adot-collector.opentelemetry.svc.cluster.local:4318`/`4317`). The ADOT Collector pod authenticates via EKS Pod Identity (`AWSXrayWriteOnlyAccess`) and exports batched traces to AWS X-Ray.
+- **Ready-to-Deploy Reference Manifests (`examples/adot/`)**:
+  - `examples/adot/adot-collector.yaml`: The `OpenTelemetryCollector` Custom Resource configured with OTLP receivers and the `awsxray` exporter.
+  - `examples/adot/sample-app-deployment.yaml`: Sample deployment demonstrating the exact environment variables required on application containers (`OTEL_EXPORTER_OTLP_ENDPOINT`, `OTEL_PROPAGATORS: xray,tracecontext,b3`).
+
 ## Terraform Backend Setup (S3 & DynamoDB)
 
 Each module uses a fully configured S3 backend defined in its `backend.tf`. The bucket, state key, DynamoDB lock table, and encryption are all hardcoded:
@@ -192,3 +202,51 @@ terraform init -backend-config="region=eu-central-1"
 ## Network & Foundation Dependencies
 
 These modules source foundational configurations (like VPC IDs, Subnet IDs, and Security Group IDs) dynamically from AWS Systems Manager (SSM) Parameter Store. Inter-module outputs (like Target Group ARNs or IAM Policy ARNs) are also shared via SSM Parameter paths to maintain state independence.
+
+## Teardown / Destroy Order
+
+When destroying an EKS environment, always tear down **Kubernetes-level resources before the cluster itself**. The Helm and Kubernetes Terraform providers need a reachable cluster API to refresh and delete their managed resources. If the cluster is deleted first, provider connectivity fails and `terraform destroy` errors with:
+
+```
+Error: Kubernetes cluster unreachable: invalid configuration: no configuration has been provided
+```
+
+### Safe Destroy Sequence
+
+```bash
+# 1. Remove Kubernetes workloads (Argo CD, External Secrets, NGINX, etc.)
+#    while the cluster API is still reachable
+terraform -chdir=eks destroy -target=module.workloads
+
+# 2. Remove base Helm charts (CloudWatch Observability, etc.)
+terraform -chdir=eks destroy -target=module.charts
+
+# 3. Destroy the EKS cluster itself (nodes are drained automatically by Auto Mode)
+terraform -chdir=eks destroy -target=aws_eks_cluster.main
+
+# 4. Destroy remaining AWS resources (ACM PCA, KMS, addons, security group rules, etc.)
+terraform -chdir=eks destroy
+
+# 5. (Optional) Destroy IAM and load balancer after EKS is gone
+terraform -chdir=iam destroy
+terraform -chdir=load_balancer destroy
+```
+
+### Recovery: Cluster Deleted Out of Band
+
+If the EKS cluster was deleted manually (via AWS Console or CLI) and already removed from Terraform state, Helm/Kubernetes resources may still exist in the state file. Remove them before running `terraform destroy` to avoid the provider connectivity error:
+
+```bash
+cd eks
+
+# List all remaining Kubernetes / Helm state entries
+terraform state list | grep -E 'module\.charts|module\.workloads'
+
+# Remove them in bulk (they are physically gone with the cluster)
+terraform state list \
+  | grep -E 'module\.charts|module\.workloads' \
+  | xargs terraform state rm
+
+# Now destroy remaining AWS resources cleanly
+terraform destroy
+```

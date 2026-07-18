@@ -1,65 +1,3 @@
-# EKS Pod Identity Trust Policy for Argo CD Server
-data "aws_iam_policy_document" "argocd_pod_identity_trust" {
-  count = var.deploy_argocd ? 1 : 0
-  statement {
-    actions = ["sts:AssumeRole", "sts:TagSession"]
-    effect  = "Allow"
-
-    principals {
-      type        = "Service"
-      identifiers = ["pods.eks.amazonaws.com"]
-    }
-
-    condition {
-      test     = "StringEquals"
-      variable = "aws:SourceAccount"
-      values   = [data.aws_caller_identity.current.account_id]
-    }
-
-
-  }
-}
-
-# IAM Role for Argo CD Server
-resource "aws_iam_role" "argocd_server" {
-  count              = var.deploy_argocd ? 1 : 0
-  name               = "${var.eks_cluster_name}-argocd-server-role"
-  assume_role_policy = data.aws_iam_policy_document.argocd_pod_identity_trust[0].json
-}
-
-# IAM Policy for Argo CD Server
-resource "aws_iam_role_policy" "argocd_server" {
-  count = var.deploy_argocd ? 1 : 0
-  name  = "ArgoCDServerPolicy"
-  role  = aws_iam_role.argocd_server[0].id
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Sid    = "ArgoCDServerPermissions"
-        Effect = "Allow"
-        Action = [
-          "sts:AssumeRole",
-          "eks:DescribeCluster",
-          "eks:ListClusters",
-          "s3:GetObject",
-          "s3:ListBucket",
-          "secretsmanager:GetSecretValue",
-          "secretsmanager:DescribeSecret",
-          "kms:Decrypt",
-          "kms:DescribeKey",
-          "ecr:GetAuthorizationToken",
-          "ecr:BatchCheckLayerAvailability",
-          "ecr:GetDownloadUrlForLayer",
-          "ecr:BatchGetImage"
-        ]
-        Resource = "*"
-      }
-    ]
-  })
-}
-
 # Argo CD Helm Release
 resource "helm_release" "argocd" {
   count            = var.deploy_argocd ? 1 : 0
@@ -101,6 +39,12 @@ resource "kubernetes_service_account" "argocd_server" {
   metadata {
     name      = "argocd-server"
     namespace = "argocd"
+    labels = {
+      "managed-by" = "terraform_aws_platform_level_eks"
+    }
+    annotations = {
+      "managed-by" = "terraform_aws_platform_level/eks"
+    }
   }
   depends_on = [helm_release.argocd]
 }
@@ -111,7 +55,7 @@ resource "aws_eks_pod_identity_association" "argocd_server" {
   cluster_name    = var.eks_cluster_name
   namespace       = "argocd"
   service_account = kubernetes_service_account.argocd_server[0].metadata[0].name
-  role_arn        = aws_iam_role.argocd_server[0].arn
+  role_arn        = var.argocd_server_role_arn
 }
 
 # Argo Rollouts

@@ -3,61 +3,13 @@ resource "kubernetes_namespace" "external_secrets" {
   count = var.deploy_external_secrets ? 1 : 0
   metadata {
     name = "external-secrets"
-  }
-}
-
-# EKS Pod Identity Trust Policy for External Secrets Operator
-data "aws_iam_policy_document" "external_secrets_pod_identity_trust" {
-  count = var.deploy_external_secrets ? 1 : 0
-  statement {
-    actions = ["sts:AssumeRole", "sts:TagSession"]
-    effect  = "Allow"
-
-    principals {
-      type        = "Service"
-      identifiers = ["pods.eks.amazonaws.com"]
+    labels = {
+      "managed-by" = "terraform_aws_platform_level_eks"
     }
-
-    condition {
-      test     = "StringEquals"
-      variable = "aws:SourceAccount"
-      values   = [data.aws_caller_identity.current.account_id]
+    annotations = {
+      "managed-by" = "terraform_aws_platform_level/eks"
     }
-
-
   }
-}
-
-# IAM Role for External Secrets Operator
-resource "aws_iam_role" "external_secrets" {
-  count              = var.deploy_external_secrets ? 1 : 0
-  name               = "${var.eks_cluster_name}-external-secrets-role"
-  assume_role_policy = data.aws_iam_policy_document.external_secrets_pod_identity_trust[0].json
-}
-
-# IAM Policy for External Secrets Operator
-resource "aws_iam_role_policy" "external_secrets" {
-  count = var.deploy_external_secrets ? 1 : 0
-  name  = "ExternalSecretsOperatorPolicy"
-  role  = aws_iam_role.external_secrets[0].id
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Sid    = "ExternalSecretsOperatorPermissions"
-        Effect = "Allow"
-        Action = [
-          "secretsmanager:GetResourcePolicy",
-          "secretsmanager:GetSecretValue",
-          "secretsmanager:DescribeSecret",
-          "secretsmanager:ListSecretVersionIds",
-          "secretsmanager:ListSecrets"
-        ]
-        Resource = "*"
-      }
-    ]
-  })
 }
 
 # Kubernetes Service Account for External Secrets Operator
@@ -66,6 +18,12 @@ resource "kubernetes_service_account" "external_secrets" {
   metadata {
     name      = "external-secrets"
     namespace = kubernetes_namespace.external_secrets[0].metadata[0].name
+    labels = {
+      "managed-by" = "terraform_aws_platform_level_eks"
+    }
+    annotations = {
+      "managed-by" = "terraform_aws_platform_level/eks"
+    }
   }
 }
 
@@ -75,7 +33,7 @@ resource "aws_eks_pod_identity_association" "external_secrets" {
   cluster_name    = var.eks_cluster_name
   namespace       = kubernetes_namespace.external_secrets[0].metadata[0].name
   service_account = kubernetes_service_account.external_secrets[0].metadata[0].name
-  role_arn        = aws_iam_role.external_secrets[0].arn
+  role_arn        = var.external_secrets_role_arn
 }
 
 # External Secrets Operator Helm Release

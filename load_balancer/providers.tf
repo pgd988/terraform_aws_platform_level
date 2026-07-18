@@ -16,4 +16,12 @@ terraform {
 
 provider "aws" {
   region = var.aws_region
+
+  default_tags {
+    tags = {
+      "managed-by" = "terraform_aws_platform_level/load_balancer"
+      "managed_by" = "terraform_aws_platform_level/load_balancer"
+      "ManagedBy"  = "terraform_aws_platform_level/load_balancer"
+    }
+  }
 }

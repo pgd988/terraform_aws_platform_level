@@ -1,0 +1,11 @@
+apiVersion: awspca.cert-manager.io/v1beta1
+kind: AWSPCAClusterIssuer
+metadata:
+  name: {{ .Values.issuerName | default "aws-privateca-issuer" }}
+  labels:
+    managed-by: "terraform_aws_platform_level_eks"
+  annotations:
+    managed-by: "terraform_aws_platform_level/eks"
+spec:
+  arn: {{ .Values.arn | quote }}
+  region: {{ .Values.region | quote }}

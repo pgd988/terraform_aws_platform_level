@@ -1,0 +1,54 @@
+# ==============================================================================
+# EKS Auto Mode — Custom NodeClass
+# ==============================================================================
+#
+# WHAT THIS IS:
+#   An EKS Auto Mode NodeClass (eks.amazonaws.com/v1). This is the Auto Mode
+#   equivalent of Karpenter's EC2NodeClass. It defines the EC2-level config
+#   for a set of nodes: which IAM role they run under, which AMI family,
+#   which ephemeral storage size, and any additional EC2 tags.
+#
+#   Unlike self-managed Karpenter, you do NOT configure subnets or security
+#   groups here — Auto Mode inherits them from the EKS cluster automatically.
+#
+# HOW TO USE:
+#   1. Deploy this NodeClass first (it has no pod-level dependencies).
+#   2. Deploy the NodePool that references it (see nodepool.yaml).
+#   3. Annotate your pods/deployments with a nodeSelector and toleration
+#      matching the taint defined in the NodePool.
+#
+# ARGOCD:
+#   Point an Argo CD Application at the directory containing this file.
+#   Argo CD will apply the NodeClass and NodePool manifests automatically.
+#   Use a separate Argo CD Application per logical workload tier so that
+#   node pool lifecycle is decoupled from application lifecycle.
+#
+# REFERENCES:
+#   https://docs.aws.amazon.com/eks/latest/userguide/auto-node-classes.html
+# ==============================================================================
+
+apiVersion: eks.amazonaws.com/v1
+kind: NodeClass
+metadata:
+  name: dedicated-workload
+  annotations:
+    # Identifies which tier this NodeClass serves — purely informational.
+    workload-tier: dedicated-example
+spec:
+  # The EKS node IAM role that EC2 instances in this pool will assume.
+  # Must have at minimum AmazonEKSWorkerNodeMinimalPolicy and
+  # AmazonEC2ContainerRegistryPullOnly attached (done in iam/eks/main.tf).
+  role: eks-node-role
+
+  # Bottlerocket is the only supported AMI family in EKS Auto Mode.
+  # AWS patches and rotates these automatically.
+  ephemeralStorage:
+    size: "50Gi"
+    iops: 3000
+    throughput: 125
+
+  # Additional tags propagated to every EC2 instance in this pool.
+  # "managed-by" follows the repo convention from providers.tf default_tags.
+  tags:
+    workload-tier: dedicated-example
+    managed-by: terraform_aws_platform_level/eks

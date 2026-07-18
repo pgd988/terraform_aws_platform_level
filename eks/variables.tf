@@ -25,22 +25,23 @@ variable "deploy_apps" {
   default     = true
 }
 
+variable "deploy_ascp" {
+  description = "Toggle deployment of AWS Secrets and Configuration Provider (ASCP) EKS managed add-on (Kubernetes Secrets Store CSI Driver)"
+  type        = bool
+  default     = true
+}
+
+variable "deploy_adot" {
+  description = "Toggle deployment of AWS Distro for OpenTelemetry (ADOT) EKS managed add-on and its required cert-manager prerequisite"
+  type        = bool
+  default     = false
+}
+
 variable "eks_cluster_name" {
   type    = string
   default = "platform-cluster"
 }
 
-variable "node_instance_types" {
-  description = "List of EC2 instance types for the default EKS managed node group"
-  type        = list(string)
-  default     = ["t3.small"]
-}
-
-variable "alb_sg_id" {
-  description = "Security Group ID of the ALB (output from load_balancer module). Required when deploy_eks = true."
-  type        = string
-  default     = ""
-}
 
 variable "admin_allowed_cidrs" {
   description = "IPv4 CIDR blocks allowed to reach EKS API public endpoint (DevOps local PCs / VPN)"
@@ -48,11 +49,6 @@ variable "admin_allowed_cidrs" {
   default     = ["0.0.0.0/0"]
 }
 
-variable "eks_admins_arn" {
-  description = "ARN of the IAM Group for EKS Administrators (output from iam module). Required when deploy_eks = true."
-  type        = string
-  default     = ""
-}
 
 variable "deletion_protection" {
   description = "Enable deletion protection on supported resources (EKS API-level). Set to true for production deployments."
@@ -61,7 +57,7 @@ variable "deletion_protection" {
 }
 
 variable "enable_auto_mode" {
-  description = "Enable Amazon EKS Auto Mode (managed Karpenter, LBC, CoreDNS, EBS CSI, and Bottlerocket OS)"
+  description = "Enable Amazon EKS Auto Mode (AWS-managed node provisioning, CoreDNS, EBS CSI, and Bottlerocket OS)"
   type        = bool
   default     = true
 }
@@ -97,3 +93,38 @@ variable "argocd_github_secret_name" {
   default     = "argocd/github-app"
 }
 
+variable "deploy_argocd" {
+  description = "Toggle deployment of Argo CD"
+  type        = bool
+  default     = true
+}
+
+variable "deploy_external_secrets" {
+  description = "Toggle deployment of External Secrets Operator"
+  type        = bool
+  default     = true
+}
+
+variable "deploy_argo_rollouts" {
+  description = "Toggle deployment of Argo Rollouts"
+  type        = bool
+  default     = true
+}
+
+variable "deploy_argo_events" {
+  description = "Toggle deployment of Argo Events"
+  type        = bool
+  default     = false
+}
+
+variable "deploy_aws_lbc" {
+  description = "Toggle deployment of AWS Load Balancer Controller (only applicable when enable_auto_mode = false)"
+  type        = bool
+  default     = false
+}
+
+variable "deploy_nginx" {
+  description = "Toggle deployment of NGINX default backend"
+  type        = bool
+  default     = false
+}

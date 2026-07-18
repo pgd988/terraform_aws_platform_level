@@ -16,4 +16,12 @@ terraform {
 
 provider "aws" {
   region = var.aws_region
+
+  default_tags {
+    tags = {
+      "managed-by" = "terraform_aws_platform_level/databases"
+      "managed_by" = "terraform_aws_platform_level/databases"
+      "ManagedBy"  = "terraform_aws_platform_level/databases"
+    }
+  }
 }

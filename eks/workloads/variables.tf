@@ -8,6 +8,38 @@ variable "eks_cluster_arn" {
   type        = string
 }
 
+# IAM Role ARNs — passed in from parent eks/ module (sourced from iam/ remote state)
+variable "adot_collector_role_arn" {
+  description = "IAM Role ARN for the ADOT Collector (EKS Pod Identity)"
+  type        = string
+  default     = ""
+}
+
+variable "external_secrets_role_arn" {
+  description = "IAM Role ARN for External Secrets Operator (EKS Pod Identity)"
+  type        = string
+  default     = ""
+}
+
+variable "argocd_server_role_arn" {
+  description = "IAM Role ARN for the Argo CD Server (EKS Pod Identity)"
+  type        = string
+  default     = ""
+}
+
+variable "lbc_role_arn" {
+  description = "IAM Role ARN for the AWS Load Balancer Controller (EKS Pod Identity)"
+  type        = string
+  default     = ""
+}
+
+# Cross-module: ALB Target Group ARN — passed from load_balancer/ remote state via parent eks/ module
+variable "default_tg_arn" {
+  description = "ARN of the ALB default Target Group for the NGINX sink TargetGroupBinding"
+  type        = string
+  default     = null
+}
+
 variable "deploy_aws_lbc" {
   description = "Toggle deployment of AWS Load Balancer Controller"
   type        = bool
@@ -48,6 +80,12 @@ variable "deploy_argo_events" {
 
 variable "deploy_external_secrets" {
   description = "Toggle deployment of External Secrets Operator"
+  type        = bool
+  default     = true
+}
+
+variable "deploy_adot" {
+  description = "Toggle deployment of ADOT Collector IAM Role and EKS Pod Identity association"
   type        = bool
   default     = true
 }

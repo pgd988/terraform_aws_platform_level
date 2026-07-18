@@ -1,0 +1,36 @@
+# Example Application Deployment with OpenTelemetry (OTel) SDK configured for AWS X-Ray
+# Application pods do NOT send traces directly to AWS X-Ray and do NOT need any AWS IAM credentials.
+# Instead, they export standard OTLP over internal Kubernetes networking to the ADOT Collector service.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sample-app
+  namespace: default
+  labels:
+    app: sample-app
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: sample-app
+  template:
+    metadata:
+      labels:
+        app: sample-app
+    spec:
+      containers:
+        - name: app
+          image: amazon/aws-otel-gocurl:latest
+          command: ["/bin/sleep", "3600"]
+          env:
+            # 1. Point OTel SDK to the ADOT Collector K8s Service (HTTP port 4318 or gRPC port 4317)
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: "http://adot-collector-collector.opentelemetry.svc.cluster.local:4318"
+            
+            # 2. Tell OTel SDK to export Traces using standard OTLP protocol
+            - name: OTEL_TRACES_EXPORTER
+              value: "otlp"
+            
+            # 3. REQUIRED FOR X-RAY: Enable AWS X-Ray ID propagator so Trace IDs start with epoch timestamps
+            - name: OTEL_PROPAGATORS
+              value: "xray,tracecontext,b3"

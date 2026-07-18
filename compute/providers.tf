@@ -16,4 +16,12 @@ terraform {
 
 provider "aws" {
   region = var.aws_region
+
+  default_tags {
+    tags = {
+      "managed-by" = "terraform_aws_platform_level/compute"
+      "managed_by" = "terraform_aws_platform_level/compute"
+      "ManagedBy"  = "terraform_aws_platform_level/compute"
+    }
+  }
 }

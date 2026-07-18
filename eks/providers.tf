@@ -12,14 +12,6 @@ terraform {
       source  = "hashicorp/kubernetes"
       version = "~> 2.24.0"
     }
-    tls = {
-      source  = "hashicorp/tls"
-      version = "~> 4.0"
-    }
-    http = {
-      source  = "hashicorp/http"
-      version = "~> 3.4"
-    }
   }
 
   backend "s3" {
@@ -32,28 +24,51 @@ terraform {
 
 provider "aws" {
   region = var.aws_region
+
+  default_tags {
+    tags = {
+      "managed-by" = "terraform_aws_platform_level/eks"
+      "managed_by" = "terraform_aws_platform_level/eks"
+      "ManagedBy"  = "terraform_aws_platform_level/eks"
+    }
+  }
 }
 
+# WHY managed resource references (not data sources) for the provider config:
+#
+# data "aws_eks_cluster" calls the AWS API during the refresh phase.
+# When the cluster has been manually deleted (or not yet created), the API
+# returns "not found" and Terraform hard-fails — you cannot catch this with try().
+#
+# aws_eks_cluster.main[0] reads from the Terraform STATE, not from AWS.
+# If the resource was removed from state, try() returns "" gracefully.
+# If the cluster is being destroyed, Terraform already has the endpoint
+# from the last known state, so the provider can still initialise to
+# clean up any remaining Kubernetes/Helm resources.
+#
+# The exec block uses var.eks_cluster_name (a static input variable) so the
+# token-generation command never references a resource attribute that may
+# be unknown during provider initialisation.
 provider "helm" {
   kubernetes {
-    host                   = var.deploy_eks ? aws_eks_cluster.main[0].endpoint : null
-    cluster_ca_certificate = var.deploy_eks ? base64decode(aws_eks_cluster.main[0].certificate_authority[0].data) : null
+    host                   = try(aws_eks_cluster.main[0].endpoint, "")
+    cluster_ca_certificate = try(base64decode(aws_eks_cluster.main[0].certificate_authority[0].data), "")
 
     exec {
       api_version = "client.authentication.k8s.io/v1beta1"
       command     = "aws"
-      args        = ["eks", "get-token", "--cluster-name", var.deploy_eks ? aws_eks_cluster.main[0].name : ""]
+      args        = ["eks", "get-token", "--cluster-name", var.eks_cluster_name]
     }
   }
 }
 
 provider "kubernetes" {
-  host                   = var.deploy_eks ? aws_eks_cluster.main[0].endpoint : null
-  cluster_ca_certificate = var.deploy_eks ? base64decode(aws_eks_cluster.main[0].certificate_authority[0].data) : null
+  host                   = try(aws_eks_cluster.main[0].endpoint, "")
+  cluster_ca_certificate = try(base64decode(aws_eks_cluster.main[0].certificate_authority[0].data), "")
 
   exec {
     api_version = "client.authentication.k8s.io/v1beta1"
     command     = "aws"
-    args        = ["eks", "get-token", "--cluster-name", var.deploy_eks ? aws_eks_cluster.main[0].name : ""]
+    args        = ["eks", "get-token", "--cluster-name", var.eks_cluster_name]
   }
 }

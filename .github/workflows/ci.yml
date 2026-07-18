@@ -216,7 +216,8 @@ jobs:
 
   # ──────────────────────────────────────────────
   # Job 3a – Terraform apply (Wave 1: Platform Foundations)
-  # Runs first; eks depends on iam and load_balancer SSM outputs.
+  # Runs in parallel; iam and load_balancer must complete before eks.
+  # eks reads both state files directly via terraform_remote_state.
   # ──────────────────────────────────────────────
   terraform-apply-wave1:
     name: Terraform Apply – ${{ matrix.module }}
@@ -273,10 +274,10 @@ jobs:
         run: terraform apply -input=false -auto-approve tfplan.binary
 
   # ──────────────────────────────────────────────
-  # Job 3b – Terraform plan (Wave 2: eks with resolved vars)
-  # Runs after Wave 1 apply on push to main. Reads resolved
-  # alb_sg_id and eks_admins_arn from SSM after iam + load_balancer apply.
-  # Produces tfplan.binary and plan summary for review before manual apply.
+  # Job 3b – Terraform plan (Wave 2: eks)
+  # Runs after Wave 1 apply on push to main. Reads iam and load_balancer
+  # state directly via terraform_remote_state — no SSM lookups needed.
+  # Produces tfplan.binary for review before apply.
   # ──────────────────────────────────────────────
   terraform-plan-eks-resolved:
     name: Terraform Plan – eks (Resolved Vars)
@@ -304,19 +305,13 @@ jobs:
         with:
           terraform_version: ${{ env.TF_VERSION }}
 
-      - name: Read cross-module SSM outputs
-        id: ssm
-        run: |
-          echo "alb_sg_id=$(aws ssm get-parameter --name /platform/alb/security_group_id --query Parameter.Value --output text)" >> "$GITHUB_OUTPUT"
-          echo "eks_admins_arn=$(aws ssm get-parameter --name /platform/iam/eks_admins_arn --query Parameter.Value --output text)" >> "$GITHUB_OUTPUT"
-
       - name: Terraform Init – eks
         working-directory: eks
         run: |
           terraform init -input=false \
             -backend-config="region=${{ env.AWS_REGION }}"
 
-      - name: Terraform Plan – eks (with resolved vars)
+      - name: Terraform Plan – eks
         id: tf-plan
         working-directory: eks
         run: |
@@ -324,14 +319,12 @@ jobs:
           terraform plan \
             -input=false \
             -no-color \
-            -var="alb_sg_id=${{ steps.ssm.outputs.alb_sg_id }}" \
-            -var="eks_admins_arn=${{ steps.ssm.outputs.eks_admins_arn }}" \
             -out=tfplan.binary 2>&1 | tee plan.txt
           echo "exitcode=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
 
       - name: Write plan summary to step summary
         run: |
-          echo "## Terraform Plan – \`eks\` (Resolved Vars)" >> "$GITHUB_STEP_SUMMARY"
+          echo "## Terraform Plan – \`eks\`" >> "$GITHUB_STEP_SUMMARY"
           echo "\`\`\`" >> "$GITHUB_STEP_SUMMARY"
           head -c 60000 eks/plan.txt >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"

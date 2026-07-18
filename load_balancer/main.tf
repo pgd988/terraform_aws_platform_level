@@ -111,13 +111,7 @@ resource "aws_security_group" "alb_locked" {
   }
 }
 
-# Export ALB Security Group ID via SSM
-resource "aws_ssm_parameter" "alb_sg_id" {
-  count = var.deploy_alb ? 1 : 0
-  name  = "/platform/alb/security_group_id"
-  type  = "String"
-  value = aws_security_group.alb_locked[0].id
-}
+
 
 # ==============================================================================
 # Application Load Balancer (Private Tier)
@@ -144,13 +138,7 @@ resource "aws_lb_target_group" "default_nginx" {
   target_type = "ip"
 }
 
-# Export Target Group ARN via SSM
-resource "aws_ssm_parameter" "default_tg_arn" {
-  count = var.deploy_alb ? 1 : 0
-  name  = "/platform/alb/default_tg_arn"
-  type  = "String"
-  value = aws_lb_target_group.default_nginx[0].arn
-}
+
 
 # HTTPS Listener
 resource "aws_lb_listener" "https" {

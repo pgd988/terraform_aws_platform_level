@@ -1,0 +1,41 @@
+# OpenTelemetryCollector Custom Resource (CR) for AWS X-Ray Export
+# This CR is picked up by the ADOT Operator (`adot` EKS managed add-on) and deploys
+# the ADOT Collector Deployment and Service in the `opentelemetry` namespace.
+# It uses the pre-created `adot-collector` Kubernetes Service Account (`eks/workloads/adot.tf`)
+# which is associated with an AWS IAM role via EKS Pod Identity granting AWSXrayWriteOnlyAccess.
+apiVersion: opentelemetry.io/v1alpha1
+kind: OpenTelemetryCollector
+metadata:
+  name: adot-collector
+  namespace: opentelemetry
+  labels:
+    managed-by: "terraform_aws_platform_level_eks"
+  annotations:
+    managed-by: "terraform_aws_platform_level/eks"
+spec:
+  serviceAccount: adot-collector
+  mode: deployment
+  config: |
+    receivers:
+      otlp:
+        protocols:
+          grpc:
+            endpoint: 0.0.0.0:4317
+          http:
+            endpoint: 0.0.0.0:4318
+
+    processors:
+      batch:
+        timeout: 5s
+        send_batch_size: 1024
+
+    exporters:
+      awsxray:
+        region: eu-central-1
+
+    service:
+      pipelines:
+        traces:
+          receivers: [otlp]
+          processors: [batch]
+          exporters: [awsxray]

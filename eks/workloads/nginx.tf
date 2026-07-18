@@ -1,8 +1,3 @@
-data "aws_ssm_parameter" "default_tg_arn" {
-  count = var.deploy_nginx ? 1 : 0
-  name  = "/platform/alb/default_tg_arn"
-}
-
 # Deploy NGINX default backend via Helm with TargetGroupBinding
 resource "helm_release" "default_nginx" {
   count      = var.deploy_nginx ? 1 : 0
@@ -11,7 +6,7 @@ resource "helm_release" "default_nginx" {
   chart      = "nginx"
   namespace  = "default"
   version    = "18.1.5"
-  wait       = false 
+  wait       = false
 
   values = [
     <<EOF
@@ -45,7 +40,7 @@ extraManifests:
       serviceRef:
         name: default-nginx
         port: 80
-      targetGroupARN: ${data.aws_ssm_parameter.default_tg_arn[0].value}
+      targetGroupARN: ${var.default_tg_arn}
 EOF
   ]
 }

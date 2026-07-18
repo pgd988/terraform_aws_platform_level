@@ -4,22 +4,16 @@ variable "aws_region" {
   default     = "eu-central-1"
 }
 
-variable "deletion_protection" {
-  description = "Enable deletion protection on supported resources. Set to true for production deployments."
-  type        = bool
-  default     = false
-}
-
-variable "enable_auto_mode" {
-  description = "Enable Amazon EKS Auto Mode IAM policy attachments for the cluster role"
-  type        = bool
-  default     = true
-}
-
 variable "eks_cluster_name" {
   description = "Name of the EKS cluster"
   type        = string
   default     = "platform-cluster"
+}
+
+variable "enable_auto_mode" {
+  description = "Enable Amazon EKS Auto Mode IAM policy attachments for the cluster role and minimal worker node policies"
+  type        = bool
+  default     = true
 }
 
 variable "deploy_eks" {
